@@ -1,0 +1,8 @@
+# Buscadores: pueden indexar la landing y las tiendas públicas (/r/...).
+# El panel (/admin) es privado: no tiene sentido indexarlo.
+# Ojo: robots.txt NO es un control de seguridad; el panel está protegido por login y RLS.
+User-agent: *
+Allow: /
+Disallow: /admin
+# Páginas de seguimiento de pedidos: son privadas (link con token).
+Disallow: /r/*/pedido/
