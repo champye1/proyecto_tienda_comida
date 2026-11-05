@@ -4,6 +4,8 @@
  * - Solo el dueño puede cambiarlo (la RLS de restaurants también lo exige); el personal
  *   ve el estado pero no puede tocarlo.
  * - Al cerrar se pide confirmación: dejarlo cerrado por error significa perder pedidos.
+ * - Si hay horario configurado y está encendido fuera de horario, se muestra en ámbar
+ *   "Fuera de horario": el local no recibe pedidos hasta que empiece su próximo tramo.
  * - La tienda pública se entera en hasta ~30 s (caché del menú), pero create_order lo
  *   valida siempre en el servidor: con el local cerrado no entra ningún pedido.
  */
@@ -14,6 +16,7 @@ import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { useSession } from '@/features/auth/AuthProvider'
 import { restaurantKeys } from '@/features/restaurants/api'
 import { useCurrentRestaurant } from '@/features/restaurants/CurrentRestaurant'
+import { useOpenState } from '@/features/restaurants/openState'
 import { dbErrorMessage } from '@/lib/errors'
 import { supabase } from '@/lib/supabase'
 
@@ -36,24 +39,30 @@ export function StoreOpenToggle() {
   })
 
   const open = restaurant.is_open
+  const { inHours, opensAt } = useOpenState(restaurant)
+  const offHours = open && !inHours
   return (
     <>
       <button
         type="button"
         role="switch"
         aria-checked={open}
-        aria-label={open ? 'Local abierto. Tocar para cerrar' : 'Local cerrado. Tocar para abrir'}
+        aria-label={offHours ? 'Local fuera de horario. Tocar para cerrar' : open ? 'Local abierto. Tocar para cerrar' : 'Local cerrado. Tocar para abrir'}
         disabled={!isOwner || toggle.isPending}
-        title={isOwner ? undefined : 'Solo el dueño puede abrir o cerrar el local'}
+        title={isOwner ? (offHours && opensAt ? `Fuera de horario: abre ${opensAt}` : undefined) : 'Solo el dueño puede abrir o cerrar el local'}
         onClick={() => (open ? setConfirmClose(true) : toggle.mutate(true))}
         className={`inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors disabled:cursor-not-allowed ${
-          open ? 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200' : 'bg-zinc-200 text-zinc-800 hover:bg-zinc-300'
+          offHours
+            ? 'bg-amber-100 text-amber-900 hover:bg-amber-200'
+            : open
+              ? 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200'
+              : 'bg-zinc-200 text-zinc-800 hover:bg-zinc-300'
         } ${!isOwner ? 'opacity-80' : ''}`}
       >
-        <span className={`relative inline-flex h-5 w-9 items-center rounded-full ${open ? 'bg-emerald-500' : 'bg-zinc-400'}`}>
+        <span className={`relative inline-flex h-5 w-9 items-center rounded-full ${offHours ? 'bg-amber-500' : open ? 'bg-emerald-500' : 'bg-zinc-400'}`}>
           <span className={`size-4 rounded-full bg-white shadow transition-transform ${open ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
         </span>
-        {open ? 'Abierto' : 'Cerrado'}
+        {offHours ? 'Fuera de horario' : open ? 'Abierto' : 'Cerrado'}
       </button>
 
       {toggle.isError && !confirmClose && (

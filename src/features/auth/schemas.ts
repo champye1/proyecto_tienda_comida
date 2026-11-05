@@ -33,11 +33,16 @@ export const registerSchema = z
     email: emailField,
     password: newPasswordField,
     confirmPassword: z.string(),
+    /** Aceptación explícita de los Términos y la Política de privacidad (obligatoria). */
+    acceptTerms: z.boolean().refine((v) => v, 'Debes aceptar los Términos y la Política de privacidad'),
   })
   .refine((d) => d.password === d.confirmPassword, {
     message: 'Las contraseñas no coinciden',
     path: ['confirmPassword'],
   })
+
+/** Versión vigente de los textos legales (fecha). Se guarda con la aceptación del usuario. */
+export const LEGAL_VERSION = '2026-11-02'
 
 /** "¿Olvidaste tu contraseña?": solo pide el email al que se envía el enlace. */
 export const forgotPasswordSchema = z.object({

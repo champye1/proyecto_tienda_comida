@@ -16,9 +16,10 @@ type PostgrestLikeError = { code?: string; message?: string }
 
 /**
  * Códigos que nuestras funciones RPC lanzan con mensajes escritos para el usuario
- * (ver encabezado de supabase/migrations/20261011000500_rpc_functions.sql).
+ * (ver encabezado de supabase/migrations/20261011000500_rpc_functions.sql), más
+ * 'captcha_failed' de la Edge Function place-order.
  */
-const USER_FACING_CODES = new Set(['P0001', 'P0002', '22023', '23505', '42501'])
+const USER_FACING_CODES = new Set(['P0001', 'P0002', '22023', '23505', '42501', 'captcha_failed'])
 
 /**
  * Mensaje para errores de PostgREST/RPC: si es un error de negocio usa el texto en

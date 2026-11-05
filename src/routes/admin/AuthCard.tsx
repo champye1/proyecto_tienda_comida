@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { LegalLinks } from '@/components/LegalLinks'
 
 /** Marco centrado para login y registro. */
 export function AuthCard({ title, subtitle, children, footer }: {
@@ -17,6 +18,7 @@ export function AuthCard({ title, subtitle, children, footer }: {
         </div>
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">{children}</div>
         {footer && <div className="mt-6 text-center text-sm text-zinc-600">{footer}</div>}
+        <LegalLinks className="mt-6 flex justify-center text-xs text-zinc-500" />
       </div>
     </main>
   )

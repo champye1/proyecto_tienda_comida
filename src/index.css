@@ -49,3 +49,22 @@
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
 }
+
+/*
+  Impresión (comanda de cocina y cartel con el QR). Al imprimir solo se muestra el
+  contenido de .print-root (ver usePrint en components/Print.tsx); el resto de la app se oculta.
+*/
+.print-root {
+  display: none;
+}
+@media print {
+  body > :not(.print-root) {
+    display: none !important;
+  }
+  .print-root {
+    display: block;
+  }
+  @page {
+    margin: 4mm;
+  }
+}

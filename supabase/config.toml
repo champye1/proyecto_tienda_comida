@@ -216,10 +216,13 @@ token_verifications = 30
 web3 = 30
 
 # Configure one of the supported captcha providers: `hcaptcha`, `turnstile`.
-# [auth.captcha]
-# enabled = true
-# provider = "hcaptcha"
-# secret = ""
+# CAPTCHA (Cloudflare Turnstile) en registro, login y recuperación de contraseña.
+# En local se usa la clave SECRETA DE PRUEBA pública de Cloudflare (siempre aprueba).
+# En producción: Dashboard > Authentication > Attack Protection, con tu clave real.
+[auth.captcha]
+enabled = true
+provider = "turnstile"
+secret = "1x0000000000000000000000000000000AA"
 
 [auth.email]
 # Allow/disallow new user signups via email to your project.
@@ -399,10 +402,19 @@ deno_version = 2
 # `supabase secrets set SITE_URL=https://tu-dominio.cl`.
 [edge_runtime.secrets]
 SITE_URL = "http://localhost:5173"
+# Clave secreta DE PRUEBA de Turnstile (pública, siempre aprueba). En producción:
+# `supabase secrets set TURNSTILE_SECRET_KEY=...` con tu clave real.
+TURNSTILE_SECRET_KEY = "1x0000000000000000000000000000000AA"
+# Solo en local: acepta peticiones del navegador desde cualquier puerto de localhost.
+ALLOW_LOCALHOST_ORIGINS = "true"
 
 # Vista previa al compartir el link (ver supabase/functions/og). Es pública: la consultan
 # los bots de WhatsApp/Instagram, que no envían token de sesión.
 [functions.og]
+verify_jwt = false
+
+# Crear pedidos desde la tienda (verifica el CAPTCHA). Es pública: el cliente es anónimo.
+[functions.place-order]
 verify_jwt = false
 
 [analytics]

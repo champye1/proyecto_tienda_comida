@@ -16,14 +16,18 @@ import {
   orderHistoryQuery,
   STATUS_BADGE,
   STATUS_LABEL,
+  useConfirmOrder,
   useUpdateOrderStatus,
   type AdminOrder,
 } from '@/features/orders/api'
 import { useOrdersLive } from '@/features/orders/OrdersLive'
 import { useCurrentRestaurant } from '@/features/restaurants/CurrentRestaurant'
+import { useOpenState } from '@/features/restaurants/openState'
 import { dbErrorMessage } from '@/lib/errors'
-import { formatCLP } from '@/lib/format'
+import { formatCLP, formatDateTime } from '@/lib/format'
 import { useNow } from '@/lib/useNow'
+import { usePrint } from '@/components/Print'
+import { KitchenTicket, readAutoPrint } from '@/features/orders/KitchenTicket'
 import { OrderCard } from './OrderCard'
 import { OrderDetailModal } from './OrderDetailModal'
 
@@ -32,6 +36,7 @@ export default function OrdersPage() {
   const { orders, isLoading, error, live, sound } = useOrdersLive()
   const [tab, setTab] = useState<'board' | 'history'>('board')
   const [detail, setDetail] = useState<AdminOrder | null>(null)
+  const openState = useOpenState(restaurant)
 
   return (
     <div className="space-y-4">
@@ -45,8 +50,15 @@ export default function OrdersPage() {
         </Button>
       </div>
 
-      {!restaurant.is_open && (
+      {!restaurant.is_open ? (
         <Alert tone="info">Tu local está <strong>cerrado</strong>: los clientes no pueden hacer pedidos. Ábrelo con el interruptor de arriba.</Alert>
+      ) : (
+        !openState.inHours && (
+          <Alert tone="info">
+            Estás <strong>fuera de horario</strong>: los clientes no pueden hacer pedidos
+            {openState.opensAt ? `; vuelves a recibirlos ${openState.opensAt}` : ''}. Cambia el horario en Mi local.
+          </Alert>
+        )
       )}
 
       <div role="tablist" aria-label="Vista de pedidos" className="flex gap-1 border-b border-zinc-200">
@@ -108,11 +120,29 @@ function Board({ orders, onOpen }: { orders: AdminOrder[]; onOpen: (o: AdminOrde
   const { restaurant } = useCurrentRestaurant()
   const { freshIds } = useOrdersLive()
   const update = useUpdateOrderStatus(restaurant.id)
+  const confirm = useConfirmOrder(restaurant.id)
+  const { print, portal } = usePrint()
   const now = useNow()
+
+  /** Confirma con el tiempo habitual y, si está activado en este dispositivo, imprime la comanda. */
+  function confirmOrder(o: AdminOrder) {
+    confirm.mutate(
+      { id: o.id, minutes: restaurant.prep_time_minutes },
+      {
+        onSuccess: (updated) => {
+          if (readAutoPrint()) {
+            print(<KitchenTicket order={{ ...o, ...updated }} restaurantName={restaurant.name} timeZone={restaurant.timezone} />)
+          }
+        },
+      },
+    )
+  }
 
   return (
     <div className="space-y-3">
       {update.isError && <Alert tone="error">{dbErrorMessage(update.error)}</Alert>}
+      {confirm.isError && <Alert tone="error">{dbErrorMessage(confirm.error)}</Alert>}
+      {portal}
       <div className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:overflow-visible lg:px-0">
         {BOARD_COLUMNS.map((col) => {
           const list = orders.filter((o) => o.status === col.status)
@@ -136,8 +166,11 @@ function Board({ orders, onOpen }: { orders: AdminOrder[]; onOpen: (o: AdminOrde
                     order={o}
                     now={now}
                     fresh={freshIds.has(o.id)}
-                    busy={update.isPending && update.variables?.id === o.id}
+                    busy={(update.isPending && update.variables?.id === o.id) || (confirm.isPending && confirm.variables?.id === o.id)}
+                    prepMinutes={restaurant.prep_time_minutes}
+                    timeZone={restaurant.timezone}
                     onAdvance={(status) => update.mutate({ id: o.id, status })}
+                    onConfirm={() => confirmOrder(o)}
                     onOpen={() => onOpen(o)}
                   />
                 ))
@@ -170,7 +203,7 @@ function History({ onOpen }: { onOpen: (o: AdminOrder) => void }) {
               <span className="min-w-[8rem] flex-1">
                 <span className="block truncate font-medium text-zinc-900">{o.customer_name}</span>
                 <span className="block text-xs text-zinc-500">
-                  {new Date(o.created_at).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' })} ·{' '}
+                  {formatDateTime(o.created_at, restaurant.timezone)} ·{' '}
                   {o.type === 'delivery' ? 'Delivery' : 'Retiro'}
                 </span>
               </span>

@@ -251,6 +251,7 @@ export type Database = {
           customer_name: string;
           customer_phone: string;
           delivery_fee: number;
+          estimated_ready_at: string | null;
           id: string;
           notes: string | null;
           order_number: number;
@@ -270,6 +271,7 @@ export type Database = {
           customer_name: string;
           customer_phone: string;
           delivery_fee?: number;
+          estimated_ready_at?: string | null;
           id?: string;
           notes?: string | null;
           order_number: number;
@@ -288,6 +290,7 @@ export type Database = {
           customer_name?: string;
           customer_phone?: string;
           delivery_fee?: number;
+          estimated_ready_at?: string | null;
           id?: string;
           notes?: string | null;
           order_number?: number;
@@ -417,10 +420,13 @@ export type Database = {
           logo_url: string | null;
           min_order: number;
           name: string;
+          opening_hours: Json | null;
           phone: string | null;
           pickup_enabled: boolean;
+          prep_time_minutes: number;
           primary_color: string;
           slug: string;
+          timezone: string;
           updated_at: string;
         };
         ComputedFields: never;
@@ -436,10 +442,13 @@ export type Database = {
           logo_url?: string | null;
           min_order?: number;
           name: string;
+          opening_hours?: Json | null;
           phone?: string | null;
           pickup_enabled?: boolean;
+          prep_time_minutes?: number;
           primary_color?: string;
           slug: string;
+          timezone?: string;
           updated_at?: string;
         };
         Update: {
@@ -454,10 +463,13 @@ export type Database = {
           logo_url?: string | null;
           min_order?: number;
           name?: string;
+          opening_hours?: Json | null;
           phone?: string | null;
           pickup_enabled?: boolean;
+          prep_time_minutes?: number;
           primary_color?: string;
           slug?: string;
+          timezone?: string;
           updated_at?: string;
         };
         Relationships: [];
@@ -468,6 +480,34 @@ export type Database = {
     };
     Functions: {
       can_manage_restaurant_file: { Args: { p_object_name: string }; Returns: boolean };
+      confirm_order: {
+        Args: { p_order_id: string; p_ready_minutes: number };
+        Returns: {
+          address: string | null;
+          created_at: string;
+          customer_name: string;
+          customer_phone: string;
+          delivery_fee: number;
+          estimated_ready_at: string | null;
+          id: string;
+          notes: string | null;
+          order_number: number;
+          payment_method: Database["public"]["Enums"]["payment_method"];
+          restaurant_id: string;
+          status: Database["public"]["Enums"]["order_status"];
+          subtotal: number;
+          total: number;
+          tracking_token: string;
+          type: Database["public"]["Enums"]["order_type"];
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "orders";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       create_order: {
         Args: {
           p_address: string;
@@ -506,10 +546,13 @@ export type Database = {
           logo_url: string | null;
           min_order: number;
           name: string;
+          opening_hours: Json | null;
           phone: string | null;
           pickup_enabled: boolean;
+          prep_time_minutes: number;
           primary_color: string;
           slug: string;
+          timezone: string;
           updated_at: string;
         };
         SetofOptions: {
@@ -525,6 +568,10 @@ export type Database = {
       get_sales_report: {
         Args: { p_from: string; p_restaurant_id: string; p_to: string };
         Returns: Json;
+      };
+      is_open_at: {
+        Args: { p_at?: string; p_hours: Json; p_is_open: boolean; p_tz: string };
+        Returns: boolean;
       };
       is_reserved_slug: { Args: { p_slug: string }; Returns: boolean };
       is_restaurant_member: { Args: { p_restaurant_id: string }; Returns: boolean };
@@ -543,6 +590,34 @@ export type Database = {
         Returns: string;
       };
       reorder_menu_items: { Args: { p_ids: string[]; p_kind: string }; Returns: undefined };
+      set_order_estimate: {
+        Args: { p_order_id: string; p_ready_minutes: number };
+        Returns: {
+          address: string | null;
+          created_at: string;
+          customer_name: string;
+          customer_phone: string;
+          delivery_fee: number;
+          estimated_ready_at: string | null;
+          id: string;
+          notes: string | null;
+          order_number: number;
+          payment_method: Database["public"]["Enums"]["payment_method"];
+          restaurant_id: string;
+          status: Database["public"]["Enums"]["order_status"];
+          subtotal: number;
+          total: number;
+          tracking_token: string;
+          type: Database["public"]["Enums"]["order_type"];
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "orders";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       update_order_status: {
         Args: { p_order_id: string; p_status: Database["public"]["Enums"]["order_status"] };
         Returns: {
@@ -551,6 +626,7 @@ export type Database = {
           customer_name: string;
           customer_phone: string;
           delivery_fee: number;
+          estimated_ready_at: string | null;
           id: string;
           notes: string | null;
           order_number: number;

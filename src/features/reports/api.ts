@@ -1,15 +1,13 @@
 /**
  * Reporte de ventas del panel: consulta (RPC get_sales_report), validación y fechas.
  *
- * Las fechas se manejan como texto "AAAA-MM-DD" en hora de Chile (America/Santiago), igual
+ * Las fechas se manejan como texto "AAAA-MM-DD" en la zona horaria del restaurante, igual
  * que la función de la base. Así "hoy" es el hoy del restaurante aunque el navegador
  * esté en otra zona horaria.
  */
 import { queryOptions } from '@tanstack/react-query'
 import { z } from 'zod'
 import { supabase } from '@/lib/supabase'
-
-const TIMEZONE = 'America/Santiago'
 
 const amountsSchema = z.object({ orders: z.number().int(), revenue: z.number().int() })
 
@@ -43,13 +41,13 @@ export function salesReportQuery(rid: string, from: string, to: string) {
 }
 
 // -----------------------------------------------------------------------------
-// Fechas (texto AAAA-MM-DD en hora de Chile)
+// Fechas (texto AAAA-MM-DD en la hora del restaurante)
 // -----------------------------------------------------------------------------
 
-/** Hoy en Chile: "2026-10-14". */
-export function todayInChile(): string {
+/** Hoy en la zona horaria del restaurante: "2026-10-14". */
+export function todayIn(timeZone: string): string {
   // en-CA formatea como AAAA-MM-DD.
-  return new Intl.DateTimeFormat('en-CA', { timeZone: TIMEZONE }).format(new Date())
+  return new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date())
 }
 
 /** Suma (o resta) días a una fecha "AAAA-MM-DD". Se calcula en UTC para evitar saltos por horario de verano. */

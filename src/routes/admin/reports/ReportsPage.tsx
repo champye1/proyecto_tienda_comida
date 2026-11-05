@@ -10,7 +10,7 @@ import { useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { PageLoader } from '@/components/PageLoader'
 import { Alert } from '@/components/ui/Alert'
-import { addDays, formatDay, salesReportQuery, todayInChile, type SalesReport } from '@/features/reports/api'
+import { addDays, formatDay, salesReportQuery, todayIn, type SalesReport } from '@/features/reports/api'
 import { useCurrentRestaurant } from '@/features/restaurants/CurrentRestaurant'
 import { dbErrorMessage } from '@/lib/errors'
 import { formatCLP } from '@/lib/format'
@@ -30,7 +30,7 @@ function presets(today: string): Period[] {
 
 export default function ReportsPage() {
   const { restaurant } = useCurrentRestaurant()
-  const today = todayInChile()
+  const today = todayIn(restaurant.timezone)
   const periods = presets(today)
   const [period, setPeriod] = useState<Period>(periods[0]!)
   const query = useQuery(salesReportQuery(restaurant.id, period.from, period.to))

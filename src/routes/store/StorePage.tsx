@@ -2,7 +2,8 @@
  * Tienda pública de un restaurante (/r/:slug). Diseño mobile-first: la mayoría de los
  * clientes pide desde el celular.
  *
- *   Cabecera     logo, nombre, estado abierto/cerrado, delivery/retiro y pedido mínimo.
+ *   Cabecera     logo, nombre, estado abierto/cerrado (con la próxima apertura según el
+ *                horario), tiempo de preparación, delivery/retiro, pedido mínimo y horario.
  *   Categorías   barra fija con desplazamiento horizontal; se marca la categoría que se
  *                está viendo y al tocar una se salta a ella.
  *   Productos    agrupados por categoría; al tocar uno se abre su hoja con opciones.
@@ -10,9 +11,12 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
+import { LegalLinks } from '@/components/LegalLinks'
 import { useDocumentMeta } from '@/features/store/appearance'
 import type { PublicProduct } from '@/features/store/menu'
 import { formatCLP } from '@/lib/format'
+import { useStoreOpen } from '@/features/store/useStoreOpen'
+import { DAY_NAMES, formatDaySlots, type WeekHours } from '@/lib/openingHours'
 import { CartSheet } from './CartSheet'
 import { ProductSheet } from './ProductSheet'
 import { useStore } from './StoreRoot'
@@ -69,6 +73,7 @@ export default function StorePage() {
         <Link to="/" className="font-semibold hover:text-zinc-800">
           Pedidos
         </Link>
+        <LegalLinks className="mt-2 flex justify-center" />
       </footer>
 
       {/* Aviso al agregar */}
@@ -111,6 +116,7 @@ export default function StorePage() {
 function StoreHeader() {
   const { menu } = useStore()
   const r = menu.restaurant
+  const { open, opensAt } = useStoreOpen(r)
   const modes = [r.pickup_enabled && 'Retiro en local', r.delivery_enabled && `Delivery ${r.delivery_fee > 0 ? formatCLP(r.delivery_fee) : 'gratis'}`].filter(Boolean)
 
   return (
@@ -128,26 +134,45 @@ function StoreHeader() {
           <h1 className="text-2xl font-bold text-zinc-900">{r.name}</h1>
           <span
             className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
-              r.is_open ? 'bg-emerald-50 text-emerald-800' : 'bg-zinc-100 text-zinc-700'
+              open ? 'bg-emerald-50 text-emerald-800' : 'bg-zinc-100 text-zinc-700'
             }`}
           >
-            <span className={`size-2 rounded-full ${r.is_open ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
-            {r.is_open ? 'Abierto' : 'Cerrado'}
+            <span className={`size-2 rounded-full ${open ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
+            {open ? 'Abierto' : 'Cerrado'}
           </span>
         </div>
         {r.description && <p className="mt-1 text-zinc-600">{r.description}</p>}
         <p className="mt-2 text-sm text-zinc-600">
           {modes.join(' · ')}
           {r.min_order > 0 && ` · Mínimo ${formatCLP(r.min_order)}`}
+          {open && ` · Listo en aprox. ${r.prep_time_minutes} min`}
         </p>
         {r.address && <p className="mt-1 text-sm text-zinc-500">{r.address}</p>}
-        {!r.is_open && (
+        {!open && (
           <p className="mt-4 rounded-xl bg-zinc-100 px-4 py-3 text-sm text-zinc-700">
-            El local está cerrado y no está recibiendo pedidos. Puedes revisar el menú igual.
+            El local está cerrado{opensAt ? ` y abre ${opensAt}` : ''}. Puedes revisar el menú igual.
           </p>
         )}
+        {r.opening_hours && <WeekSchedule hours={r.opening_hours} />}
       </div>
     </header>
+  )
+}
+
+/** Horario semanal plegable (cerrado por defecto para no ocupar espacio en el celular). */
+function WeekSchedule({ hours }: { hours: WeekHours }) {
+  return (
+    <details className="mt-3 text-sm text-zinc-600">
+      <summary className="cursor-pointer font-medium text-zinc-700">Ver horario</summary>
+      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+        {hours.map((slots, i) => (
+          <div key={DAY_NAMES[i]} className="contents">
+            <dt className="capitalize">{DAY_NAMES[i]}</dt>
+            <dd className="tabular-nums">{formatDaySlots(slots)}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
   )
 }
 

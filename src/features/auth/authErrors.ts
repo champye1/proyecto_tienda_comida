@@ -40,6 +40,8 @@ export function authErrorMessage(error: unknown): string {
       case 'signup_disabled':
       case 'email_provider_disabled':
         return 'El registro está deshabilitado en este momento.'
+      case 'captcha_failed':
+        return 'No pudimos verificar que eres una persona. Intenta de nuevo.'
       case 'validation_failed':
         return 'Revisa los datos ingresados.'
     }

@@ -6,6 +6,8 @@
  * - Historial: paginado de a 20, del más nuevo al más antiguo.
  * - Cambiar estado: solo por la RPC update_order_status, que valida pertenencia y
  *   transiciones (la tabla orders no admite UPDATE directo).
+ * - Confirmar: con confirm_order, que además fija la hora estimada; set_order_estimate
+ *   la ajusta después ("+10 min"). El cliente la ve en su página de seguimiento.
  */
 import { infiniteQueryOptions, queryOptions, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
@@ -97,6 +99,59 @@ export function useUpdateOrderStatus(rid: string) {
     onError: () => queryClient.invalidateQueries({ queryKey: orderKeys.active(rid) }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: orderKeys.history(rid) }),
   })
+}
+
+/** Reemplaza un pedido del tablero por la versión que devolvió el servidor. */
+function replaceActive(queryClient: ReturnType<typeof useQueryClient>, rid: string, updated: Tables<'orders'>) {
+  queryClient.setQueryData<AdminOrder[]>(orderKeys.active(rid), (old) =>
+    old?.map((o) => (o.id === updated.id ? { ...o, ...updated } : o)),
+  )
+}
+
+/**
+ * Confirma un pedido nuevo con su tiempo estimado (RPC confirm_order: estado y hora
+ * estimada cambian juntos, en una sola operación del servidor).
+ */
+export function useConfirmOrder(rid: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, minutes }: { id: string; minutes: number }) => {
+      const { data, error } = await supabase.rpc('confirm_order', { p_order_id: id, p_ready_minutes: minutes })
+      if (error) throw error
+      return data
+    },
+    onSuccess: (updated) => replaceActive(queryClient, rid, updated),
+    onError: () => queryClient.invalidateQueries({ queryKey: orderKeys.active(rid) }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: orderKeys.history(rid) }),
+  })
+}
+
+/** Ajusta el tiempo estimado de un pedido en curso: "listo en N minutos desde ahora". */
+export function useSetOrderEstimate(rid: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, minutes }: { id: string; minutes: number }) => {
+      const { data, error } = await supabase.rpc('set_order_estimate', { p_order_id: id, p_ready_minutes: minutes })
+      if (error) throw error
+      return data
+    },
+    onSuccess: (updated) => replaceActive(queryClient, rid, updated),
+    onError: () => queryClient.invalidateQueries({ queryKey: orderKeys.active(rid) }),
+  })
+}
+
+/** Opciones rápidas de tiempo al confirmar (se suma el tiempo habitual del local si no está). */
+export function etaChoices(prepMinutes: number): number[] {
+  return [...new Set([10, 15, 20, 30, 45, 60, prepMinutes])].sort((a, b) => a - b)
+}
+
+/**
+ * Situación del tiempo estimado de un pedido en curso:
+ * minutos que faltan (negativo = atrasado). null si no tiene tiempo o ya no está en cocina.
+ */
+export function etaMinutesLeft(order: Pick<AdminOrder, 'status' | 'estimated_ready_at'>, now: number): number | null {
+  if (!order.estimated_ready_at || (order.status !== 'confirmed' && order.status !== 'preparing')) return null
+  return Math.ceil((new Date(order.estimated_ready_at).getTime() - now) / 60_000)
 }
 
 // -----------------------------------------------------------------------------

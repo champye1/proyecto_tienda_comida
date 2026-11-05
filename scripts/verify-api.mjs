@@ -2,6 +2,7 @@
 //   1. Realtime respeta RLS: cada restaurante solo recibe eventos de sus pedidos.
 //   2. Concurrencia real: pedidos simultáneos reciben correlativos únicos y consecutivos.
 //   3. Storage por la API: carpeta propia, tipo de archivo, tamaño máximo y borrado.
+//   4. CAPTCHA de pedidos: create_order ya no es invocable directo y place-order exige token.
 //
 // Uso: npm run verify:api   (requiere Supabase local con el seed recién cargado)
 
@@ -21,6 +22,9 @@ const PNG = Buffer.from(
   'base64',
 )
 
+// Token ficticio que el secreto de PRUEBA de Turnstile (config.toml) siempre acepta.
+const DUMMY_CAPTCHA = 'XXXX.DUMMY.TOKEN.XXXX'
+
 let failures = 0
 function check(ok, msg) {
   console.log(`${ok ? '  ✔' : '  ✘'} ${msg}`)
@@ -32,7 +36,9 @@ const newClient = () =>
 
 async function login(email) {
   const c = newClient()
-  const { error } = await c.auth.signInWithPassword({ email, password: 'password123' })
+  // Supabase Auth exige CAPTCHA; en local se usa el secreto de prueba de Turnstile, que
+  // acepta este token ficticio.
+  const { error } = await c.auth.signInWithPassword({ email, password: 'password123', options: { captchaToken: DUMMY_CAPTCHA } })
   if (error) throw new Error(`Login ${email}: ${error.message}`)
   await c.realtime.setAuth()
   return c
@@ -50,6 +56,20 @@ const orderArgs = (slug, items, name, phone = '+56911112222') => ({
   p_payment_method: 'cash',
   p_items: items,
 })
+
+/**
+ * Crea un pedido como lo hace la tienda: POST a la Edge Function place-order con el token
+ * del CAPTCHA. Devuelve { data, error } al estilo de supabase-js para reutilizar los checks.
+ */
+async function placeOrder(args, captchaToken = DUMMY_CAPTCHA) {
+  const res = await fetch(`${url}/functions/v1/place-order`, {
+    method: 'POST',
+    headers: { apikey: key, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ captchaToken, order: args }),
+  })
+  const body = await res.json().catch(() => null)
+  return res.ok ? { data: [body], error: null, status: res.status } : { data: null, error: body, status: res.status }
+}
 
 function listen(client, filter) {
   const events = []
@@ -85,8 +105,8 @@ const subAnon = await listen(anon, null)
 // Realtime tarda un momento en activar cada suscripción después de SUBSCRIBED.
 await sleep(3000)
 
-const { data: newA, error: errA } = await anon.rpc('create_order', orderArgs('pizzeria-demo', ITEMS_A, 'Realtime A'))
-const { data: newB, error: errB } = await anon.rpc('create_order', orderArgs('sushi-demo', ITEMS_B, 'Realtime B'))
+const { data: newA, error: errA } = await placeOrder(orderArgs('pizzeria-demo', ITEMS_A, 'Realtime A'))
+const { data: newB, error: errB } = await placeOrder(orderArgs('sushi-demo', ITEMS_B, 'Realtime B'))
 if (errA || errB) throw errA ?? errB
 await sleep(3000)
 
@@ -107,7 +127,7 @@ for (const c of [anon, ownerA, ownerB]) await c.removeAllChannels()
 console.log('\n2. Concurrencia del correlativo')
 const N = 30
 const results = await Promise.all(
-  Array.from({ length: N }, (_, i) => anon.rpc('create_order', orderArgs('pizzeria-demo', ITEMS_A, `Concurrente ${i}`, `+569700000${String(i).padStart(2, '0')}`))),
+  Array.from({ length: N }, (_, i) => placeOrder(orderArgs('pizzeria-demo', ITEMS_A, `Concurrente ${i}`, `+569700000${String(i).padStart(2, '0')}`))),
 )
 const errors = results.filter((r) => r.error)
 const numbers = results.filter((r) => !r.error).map((r) => r.data[0].order_number).sort((x, y) => x - y)
@@ -149,6 +169,21 @@ check((listAsA ?? []).length === 0, 'A no puede listar la carpeta de B')
 r = await bucketA.remove([`${A_ID}/verify.png`])
 check(!r.error && r.data?.length === 1, 'A puede borrar sus propios archivos')
 await bucketB.remove([`${B_ID}/verify-b.png`])
+
+// -----------------------------------------------------------------------------
+console.log('\n4. CAPTCHA de pedidos')
+const direct = await anon.rpc('create_order', orderArgs('pizzeria-demo', ITEMS_A, 'Sin captcha', '+56933334444'))
+check(direct.error?.code === '42501', 'El navegador ya no puede llamar a create_order directo (salta el CAPTCHA)')
+
+const noToken = await placeOrder(orderArgs('pizzeria-demo', ITEMS_A, 'Sin token', '+56933334444'), '')
+check(noToken.status === 400 && !noToken.data, 'place-order rechaza un pedido sin token de CAPTCHA')
+
+const big = await placeOrder({ ...orderArgs('pizzeria-demo', ITEMS_A, 'Grande'), p_notes: 'x'.repeat(40_000) })
+check(big.status === 413, 'place-order rechaza cuerpos demasiado grandes (413)')
+
+const business = await placeOrder(orderArgs('pizzeria-demo', [], 'Vacío', '+56933334444'))
+check(business.status === 400 && typeof business.error?.message === 'string',
+  'Los errores de negocio de create_order llegan con su mensaje en español')
 
 // -----------------------------------------------------------------------------
 console.log(failures === 0 ? '\nTodas las verificaciones pasaron.' : `\n${failures} verificación(es) fallaron.`)

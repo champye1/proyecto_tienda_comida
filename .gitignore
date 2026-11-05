@@ -8,3 +8,5 @@ dev-dist
 .DS_Store
 supabase/.branches
 supabase/.temp
+# Respaldos de la base: contienen datos personales, nunca al repositorio
+backups/

@@ -1,10 +1,12 @@
 -- Pruebas 5, 6 y 7: create_order calcula precios en el servidor, valida reglas de negocio
 -- y genera correlativos sin repetir.
+-- Nota: los pedidos se crean como service_role, igual que la Edge Function place-order
+-- (que antes verifica el CAPTCHA). Ver tests/014 para el bloqueo de anon.
 begin;
 create extension if not exists pgtap with schema extensions;
 select plan(24);
 
-set local role anon;
+set local role service_role; -- desde la migración 14, solo la Edge Function place-order (service_role) crea pedidos
 
 -- =============================================================================
 -- 5. Ignora precios enviados por el cliente
@@ -47,7 +49,7 @@ select is(
 -- =============================================================================
 -- 6. Rechazos
 -- =============================================================================
-set local role anon;
+set local role service_role; -- desde la migración 14, solo la Edge Function place-order (service_role) crea pedidos
 
 select throws_like(
   $$ select * from public.create_order('pizzeria-demo', 'Cliente', '+56911112222', 'pickup', null, null, 'cash',
@@ -147,7 +149,7 @@ select throws_like(
 -- Restaurante cerrado
 reset role;
 update public.restaurants set is_open = false where slug = 'pizzeria-demo';
-set local role anon;
+set local role service_role; -- desde la migración 14, solo la Edge Function place-order (service_role) crea pedidos
 
 select throws_like(
   $$ select * from public.create_order('pizzeria-demo', 'Cliente', '+56911112222', 'pickup', null, null, 'cash',
@@ -162,7 +164,7 @@ update public.restaurants set is_open = true where slug = 'pizzeria-demo';
 -- =============================================================================
 -- 7. Correlativos
 -- =============================================================================
-set local role anon;
+set local role service_role; -- desde la migración 14, solo la Edge Function place-order (service_role) crea pedidos
 
 select lives_ok(
   $$ select * from public.create_order('pizzeria-demo', 'Correlativo Uno', '+56911112222', 'pickup', null, null, 'cash',

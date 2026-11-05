@@ -6,7 +6,8 @@
  *   - Se valida su formato antes de consultar.
  *   - get_order_by_token nunca devuelve teléfono, nombre ni dirección del cliente.
  *   - La página es noindex (no aparece en buscadores).
- * El estado se actualiza en vivo (Realtime, ver features/store/orderLive.ts) y, como
+ * Si el restaurante indicó un tiempo estimado, se muestra la hora aproximada (en la hora
+ * del restaurante). El estado se actualiza en vivo (Realtime, ver features/store/orderLive.ts) y, como
  * respaldo, se consulta cada 60 s y al volver a la pestaña.
  */
 import { useState, type ReactNode } from 'react'
@@ -18,7 +19,7 @@ import { useDocumentMeta } from '@/features/store/appearance'
 import { useOrderLiveUpdates } from '@/features/store/orderLive'
 import { FINAL_STATUSES, statusLabel, TRACKING_TOKEN, trackedOrderQuery, type OrderStatus, type TrackedOrder } from '@/features/store/orders'
 import { dbErrorMessage } from '@/lib/errors'
-import { formatCLP } from '@/lib/format'
+import { formatCLP, formatTime } from '@/lib/format'
 
 /** Pasos del pedido en orden (cancelado se muestra aparte). */
 const STEPS: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'delivered']
@@ -81,6 +82,12 @@ function OrderDetail({ order }: { order: TrackedOrder }) {
           <p className="mt-2 text-sm text-zinc-600">
             {order.type === 'delivery' ? 'Delivery' : 'Retiro en el local'} · {order.payment_method === 'cash' ? 'Pago en efectivo' : 'Pago por transferencia'}
           </p>
+          {order.estimated_ready_at && (order.status === 'confirmed' || order.status === 'preparing') && (
+            <p className="mt-3 inline-block rounded-xl bg-brand/10 px-4 py-2 text-sm font-semibold text-zinc-900">
+              {order.type === 'delivery' ? 'Sale a despacho' : 'Listo para retirar'} aprox. a las{' '}
+              <span className="tabular-nums">{formatTime(order.estimated_ready_at, order.restaurant.timezone)}</span>
+            </p>
+          )}
         </div>
 
         {!cancelled && (

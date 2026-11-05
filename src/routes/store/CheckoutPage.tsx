@@ -1,20 +1,23 @@
 /**
  * Checkout (/r/:slug/checkout): datos del cliente, retiro o delivery, pago y resumen.
  *
- * - Al confirmar se llama a create_order con SOLO ids y cantidades; el servidor calcula
- *   precios, valida todo y devuelve el número de pedido y el token de seguimiento.
+ * - Al confirmar se envía el pedido (SOLO ids y cantidades) a la Edge Function place-order
+ *   junto con el token del CAPTCHA; el servidor verifica que no sea un bot, calcula precios,
+ *   valida todo y devuelve el número de pedido y el token de seguimiento.
  * - Si el servidor rechaza el pedido (local cerrado, producto agotado, límite de pedidos…)
  *   se muestra su mensaje y se recarga el menú, por si cambió algo.
  * - "Recordar mis datos" es opcional y viene desmarcado (privacidad: el dispositivo puede
  *   ser compartido). Si se desmarca, se borran los datos guardados.
  */
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Captcha, type CaptchaHandle } from '@/components/Captcha'
 import { Alert } from '@/components/ui/Alert'
 import { InputField, TextareaField } from '@/components/ui/Field'
 import { useDocumentMeta } from '@/features/store/appearance'
 import { checkoutSchema, createOrder, readSavedCustomer, saveCustomer, type CheckoutValues } from '@/features/store/orders'
+import { useStoreOpen } from '@/features/store/useStoreOpen'
 import { dbErrorMessage } from '@/lib/errors'
 import { formatCLP } from '@/lib/format'
 import { fieldErrors, type FieldErrors } from '@/lib/forms'
@@ -23,6 +26,7 @@ import { useStore } from './StoreRoot'
 export default function CheckoutPage() {
   const { slug, menu, cart, lines, subtotal } = useStore()
   const { restaurant } = menu
+  const { open } = useStoreOpen(restaurant)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   useDocumentMeta({ title: `Finalizar pedido · ${restaurant.name}` })
@@ -39,16 +43,25 @@ export default function CheckoutPage() {
   })
   const [remember, setRemember] = useState(saved !== null)
   const [errors, setErrors] = useState<FieldErrors<CheckoutValues>>({})
+  // CAPTCHA: el servidor (place-order) rechaza pedidos sin token válido, lo que frena
+  // a los bots que inundan al restaurante con pedidos falsos.
+  const captcha = useRef<CaptchaHandle>(null)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
 
   const order = useMutation({
-    mutationFn: (data: Parameters<typeof createOrder>[1]) => createOrder(slug, data, cart.lines),
-    onSuccess: (result, data) => {
+    mutationFn: ({ data, token }: { data: Parameters<typeof createOrder>[1]; token: string }) =>
+      createOrder(slug, data, cart.lines, token),
+    onSuccess: (result, { data }) => {
       saveCustomer(remember ? { name: data.name, phone: data.phone, address: data.address } : null)
       cart.clear()
       navigate(`/r/${slug}/pedido/${result.tracking_token}`, { replace: true })
     },
     // Puede que el menú haya cambiado (producto agotado, local cerrado): se recarga.
-    onError: () => queryClient.invalidateQueries({ queryKey: ['store', slug, 'menu'] }),
+    // El token del CAPTCHA es de un solo uso: se pide uno nuevo para reintentar.
+    onError: () => {
+      captcha.current?.reset()
+      return queryClient.invalidateQueries({ queryKey: ['store', slug, 'menu'] })
+    },
   })
 
   const deliveryFee = values.type === 'delivery' ? restaurant.delivery_fee : 0
@@ -62,8 +75,9 @@ export default function CheckoutPage() {
       setErrors(fieldErrors(parsed.error))
       return
     }
+    if (!captchaToken) return
     setErrors({})
-    order.mutate(parsed.data)
+    order.mutate({ data: parsed.data, token: captchaToken })
   }
 
   if (lines.length === 0) {
@@ -95,7 +109,7 @@ export default function CheckoutPage() {
       </header>
 
       <form onSubmit={onSubmit} noValidate className="mx-auto max-w-2xl space-y-5 px-4 py-6">
-        {!restaurant.is_open && <Alert tone="error">El local está cerrado y no está recibiendo pedidos en este momento.</Alert>}
+        {!open && <Alert tone="error">El local está cerrado y no está recibiendo pedidos en este momento.</Alert>}
         {order.isError && <Alert tone="error">{dbErrorMessage(order.error)}</Alert>}
 
         <Card title="Tus datos">
@@ -220,12 +234,27 @@ export default function CheckoutPage() {
           </Alert>
         )}
 
+        <Captcha ref={captcha} onToken={setCaptchaToken} />
+
+        {/* Aviso de privacidad: qué pasa con los datos al confirmar (Ley 21.719). */}
+        <p className="text-xs text-zinc-500">
+          Al confirmar, tus datos se comparten con {restaurant.name} solo para preparar y entregar tu pedido. Ver{' '}
+          <Link to="/legal/privacidad" target="_blank" className="underline">
+            Política de privacidad
+          </Link>{' '}
+          y{' '}
+          <Link to="/legal/terminos" target="_blank" className="underline">
+            Términos
+          </Link>
+          .
+        </p>
+
         <button
           type="submit"
-          disabled={order.isPending || !restaurant.is_open || belowMinimum}
+          disabled={order.isPending || !open || belowMinimum || !captchaToken}
           className="flex min-h-14 w-full items-center justify-between rounded-xl bg-brand px-6 text-lg font-semibold text-brand-contrast disabled:opacity-50"
         >
-          <span>{order.isPending ? 'Enviando pedido…' : 'Confirmar pedido'}</span>
+          <span>{order.isPending ? 'Enviando pedido…' : captchaToken ? 'Confirmar pedido' : 'Verificando…'}</span>
           <span className="tabular-nums">{formatCLP(total)}</span>
         </button>
       </form>

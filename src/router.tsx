@@ -2,6 +2,8 @@
  * Mapa de rutas de la aplicación (React Router).
  *
  *   /                         Página de inicio de la plataforma (presentación + registro)
+ *   /legal/terminos           Términos y condiciones        ┐ públicas
+ *   /legal/privacidad         Política de privacidad        ┘
  *   /r/:slug                  Tienda pública de un restaurante (clientes, sin login)
  *   /r/:slug/checkout         Datos del cliente y confirmación del pedido
  *   /r/:slug/pedido/:token    Pedido confirmado + seguimiento (link privado)
@@ -41,6 +43,16 @@ export const router = createBrowserRouter([
         index: true,
         // Landing animada: archivo aparte, así Motion no se descarga en la tienda ni en el panel.
         lazy: async () => ({ Component: (await import('./routes/landing/LandingPage')).default }),
+      },
+
+      // ---------------------------------------------------------------- Legales
+      {
+        path: '/legal/terminos',
+        lazy: async () => ({ Component: (await import('./routes/legal/TermsPage')).default }),
+      },
+      {
+        path: '/legal/privacidad',
+        lazy: async () => ({ Component: (await import('./routes/legal/PrivacyPage')).default }),
       },
 
       // ---------------------------------------------------------------- Tienda

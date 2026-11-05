@@ -4,13 +4,20 @@
  * Aparece si una página falla de forma inesperada, en vez de dejar la pantalla en blanco.
  * Caso típico en producción: se publicó una versión nueva y el navegador (o la PWA
  * instalada) pide un archivo JS que ya no existe. Recargar trae la versión nueva.
- * No muestra detalles técnicos al usuario; quedan en la consola del navegador.
+ * No muestra detalles técnicos al usuario; quedan en la consola del navegador y, si el
+ * monitoreo está activo, se reportan a Sentry (sin datos personales: ver lib/monitoring.ts).
  */
+import { useEffect } from 'react'
 import { isRouteErrorResponse, Link, useRouteError } from 'react-router'
+import { reportError } from '@/lib/monitoring'
 
 export default function RouteError() {
   const error = useRouteError()
   console.error(error)
+  // Las páginas inexistentes (404) no son fallas: no se reportan.
+  useEffect(() => {
+    if (!(isRouteErrorResponse(error) && error.status === 404)) reportError(error)
+  }, [error])
 
   // Error al descargar el código de una página (versión nueva publicada o sin conexión).
   const chunkFailed =

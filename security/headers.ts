@@ -29,20 +29,26 @@ type Directives = Record<string, string[]>
  * Construye la Content-Security-Policy.
  * @param supabaseUrl URL de la API de Supabase (VITE_SUPABASE_URL).
  * @param options.meta true si va en <meta>: ahí el navegador ignora frame-ancestors.
+ * @param options.sentryDsn DSN de Sentry (opcional): permite enviar reportes de error a su servidor.
  */
-export function buildCsp(supabaseUrl: string, { meta = false } = {}): string {
+export function buildCsp(supabaseUrl: string, { meta = false, sentryDsn = '' } = {}): string {
   const api = new URL(supabaseUrl)
   const isHttps = api.protocol === 'https:'
   // Realtime usa WebSocket: wss:// en producción, ws:// en local.
   const realtime = `${isHttps ? 'wss:' : 'ws:'}//${api.host}`
 
+  // CAPTCHA (Cloudflare Turnstile): su script y su iframe. Única excepción a "solo lo propio".
+  const turnstile = 'https://challenges.cloudflare.com'
+
   const directives: Directives = {
     'default-src': ["'self'"], // todo lo no listado: solo nuestro dominio
-    'script-src': ["'self'"], // sin scripts inline ni de terceros
+    'script-src': ["'self'", turnstile], // sin scripts inline; de terceros solo el CAPTCHA
+    'frame-src': [turnstile], // el desafío del CAPTCHA se muestra en un iframe de Cloudflare
     'style-src': ["'self'"], // sin estilos inline (el color de marca se aplica por CSSOM, que está permitido)
     'img-src': ["'self'", 'data:', 'blob:', api.origin], // blob: = vista previa de fotos antes de subirlas
     'font-src': ["'self'"],
-    'connect-src': ["'self'", api.origin, realtime], // fetch/XHR/WebSocket solo a Supabase
+    // fetch/XHR/WebSocket solo a Supabase (y a Sentry si el monitoreo está activo).
+    'connect-src': ["'self'", api.origin, realtime, ...(sentryDsn ? [new URL(sentryDsn).origin] : [])],
     'manifest-src': ["'self'"],
     'worker-src': ["'self'"], // service worker de la PWA
     'object-src': ["'none'"], // sin plugins (<object>, <embed>)
@@ -59,9 +65,9 @@ export function buildCsp(supabaseUrl: string, { meta = false } = {}): string {
 }
 
 /** Todas las cabeceras de seguridad HTTP (para el hosting y `vite preview`). */
-export function securityHeaders(supabaseUrl: string): Record<string, string> {
+export function securityHeaders(supabaseUrl: string, sentryDsn = ''): Record<string, string> {
   const headers: Record<string, string> = {
-    'Content-Security-Policy': buildCsp(supabaseUrl),
+    'Content-Security-Policy': buildCsp(supabaseUrl, { sentryDsn }),
     'X-Frame-Options': 'DENY',
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'strict-origin-when-cross-origin',

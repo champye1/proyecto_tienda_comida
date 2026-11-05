@@ -19,14 +19,14 @@ import { buildCsp, devSecurityHeaders, securityHeaders } from './security/header
  * Inyecta la CSP como <meta http-equiv> al inicio del <head>, solo en el build
  * (en desarrollo rompería la recarga en caliente, que usa scripts inline).
  */
-function cspMeta(supabaseUrl: string): Plugin {
+function cspMeta(supabaseUrl: string, sentryDsn: string): Plugin {
   return {
     name: 'csp-meta',
     apply: 'build',
     transformIndexHtml: () => [
       {
         tag: 'meta',
-        attrs: { 'http-equiv': 'Content-Security-Policy', content: buildCsp(supabaseUrl, { meta: true }) },
+        attrs: { 'http-equiv': 'Content-Security-Policy', content: buildCsp(supabaseUrl, { meta: true, sentryDsn }) },
         injectTo: 'head-prepend',
       },
     ],
@@ -51,12 +51,13 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
   const supabaseUrl = env.VITE_SUPABASE_URL ?? 'http://127.0.0.1:55321'
   const supabaseHost = new URL(supabaseUrl).host
+  const sentryDsn = env.VITE_SENTRY_DSN ?? ''
 
   return {
     plugins: [
       react(),
       tailwindcss(),
-      cspMeta(supabaseUrl),
+      cspMeta(supabaseUrl, sentryDsn),
       preconnectSupabase(supabaseUrl),
       VitePWA({
         // 'prompt': nunca recargar solo; en cocina una recarga inesperada en plena hora punta es peor que una versión vieja.
@@ -80,6 +81,9 @@ export default defineConfig(({ mode }) => {
         workbox: {
           // Solo recursos estáticos del build. Nada de datos.
           globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+          // El SDK de monitoreo (~450 KB) solo se descarga si está activado: no se precachea
+          // para no hacérselo bajar a todos los clientes.
+          globIgnores: ['**/monitoring-*.js'],
           navigateFallback: '/index.html',
           cleanupOutdatedCaches: true,
           // Seguridad: cualquier petición a Supabase (REST, Auth, Realtime, Storage, RPC) va
@@ -100,7 +104,7 @@ export default defineConfig(({ mode }) => {
     },
     // Cabeceras de seguridad en desarrollo (sin CSP) y en `vite preview` (todas, como en producción).
     server: { headers: devSecurityHeaders() },
-    preview: { headers: securityHeaders(supabaseUrl) },
+    preview: { headers: securityHeaders(supabaseUrl, sentryDsn) },
     // Build de producción.
     build: {
       // Sin source maps públicos: no se publica el código fuente original.
@@ -112,6 +116,8 @@ export default defineConfig(({ mode }) => {
             // Realtime va aparte: la página de seguimiento del cliente lo usa sin cargar el resto de supabase-js.
             if (id.includes('node_modules/@supabase/realtime-js') || id.includes('node_modules/@supabase/phoenix')) return 'realtime'
             if (id.includes('node_modules/@supabase')) return 'supabase'
+            // Sentry aparte y con nombre fijo, para excluirlo del precache de la PWA (ver workbox).
+            if (id.includes('node_modules/@sentry')) return 'monitoring'
             if (id.includes('node_modules/react') || id.includes('node_modules/scheduler')) return 'react'
           },
         },

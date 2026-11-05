@@ -1,16 +1,19 @@
 /**
  * Inicio del panel (/admin): resumen del restaurante activo.
  * Muestra el resumen de hoy (ventas, pedidos, pendientes), el link de la tienda (para
- * compartir), el estado abierto/cerrado, la configuración de delivery y los próximos pasos.
+ * compartir, con su código QR), el estado abierto/cerrado (según el interruptor y el
+ * horario), la configuración de delivery y los próximos pasos.
  */
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Alert } from '@/components/ui/Alert'
 import { useOrdersLive } from '@/features/orders/OrdersLive'
-import { salesReportQuery, todayInChile } from '@/features/reports/api'
+import { salesReportQuery, todayIn } from '@/features/reports/api'
 import { useCurrentRestaurant } from '@/features/restaurants/CurrentRestaurant'
+import { useOpenState } from '@/features/restaurants/openState'
 import { formatCLP } from '@/lib/format'
+import { StoreQrModal } from './StoreQrModal'
 
 /** Nombre visible de cada rol de miembro. */
 const roleLabel = { owner: 'Dueño', staff: 'Personal' } as const
@@ -22,7 +25,9 @@ export default function DashboardPage() {
   const passwordChanged = (location.state as { passwordChanged?: boolean } | null)?.passwordChanged === true
   const storeUrl = `${window.location.origin}/r/${restaurant.slug}`
   const [copied, setCopied] = useState(false)
-  const today = todayInChile()
+  const [qrOpen, setQrOpen] = useState(false)
+  const openState = useOpenState(restaurant)
+  const today = todayIn(restaurant.timezone)
   const report = useQuery(salesReportQuery(restaurant.id, today, today))
   const { pendingCount } = useOrdersLive()
 
@@ -75,6 +80,12 @@ export default function DashboardPage() {
             >
               {copied ? 'Copiado ✓' : 'Copiar link'}
             </button>
+            <button
+              onClick={() => setQrOpen(true)}
+              className="inline-flex min-h-11 items-center rounded-lg border border-zinc-300 px-4 text-sm font-semibold hover:bg-zinc-50"
+            >
+              Código QR
+            </button>
             <a
               href={storeUrl}
               target="_blank"
@@ -89,9 +100,23 @@ export default function DashboardPage() {
         <section className="rounded-2xl border border-zinc-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-zinc-500">Estado del local</h2>
           <p className="mt-2 flex items-center gap-2 font-medium text-zinc-900">
-            <span className={`size-2.5 rounded-full ${restaurant.is_open ? 'bg-green-500' : 'bg-zinc-400'}`} />
-            {restaurant.is_open ? 'Abierto: recibiendo pedidos' : 'Cerrado: no recibe pedidos'}
+            <span
+              className={`size-2.5 rounded-full ${openState.accepting ? 'bg-green-500' : openState.manual ? 'bg-amber-500' : 'bg-zinc-400'}`}
+            />
+            {openState.accepting
+              ? 'Abierto: recibiendo pedidos'
+              : openState.manual
+                ? `Fuera de horario${openState.opensAt ? `: abre ${openState.opensAt}` : ''}`
+                : 'Cerrado: no recibe pedidos'}
           </p>
+          {!openState.hasSchedule && (
+            <p className="mt-1 text-sm text-zinc-500">
+              Sin horario automático.{' '}
+              <Link to="/admin/local" className="font-semibold text-zinc-700 underline">
+                Configurarlo
+              </Link>
+            </p>
+          )}
           <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
             <div>
               <dt className="text-zinc-500">Delivery</dt>
@@ -131,6 +156,7 @@ export default function DashboardPage() {
           </li>
         </ol>
       </section>
+      <StoreQrModal open={qrOpen} onClose={() => setQrOpen(false)} restaurant={restaurant} storeUrl={storeUrl} />
     </div>
   )
 }

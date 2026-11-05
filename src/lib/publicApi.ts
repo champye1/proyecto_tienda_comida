@@ -65,3 +65,32 @@ export async function publicRpc<F extends keyof Functions>(
   }
   return body as Functions[F]['Returns']
 }
+
+/**
+ * Llama a una Edge Function pública (POST con JSON), p. ej. `place-order`.
+ * Las funciones responden errores con la misma forma { code, message }, así que
+ * dbErrorMessage los traduce igual que los de RPC.
+ */
+export async function publicFunction<T>(name: string, payload: unknown): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(new URL(`/functions/v1/${name}`, env.VITE_SUPABASE_URL), {
+      method: 'POST',
+      credentials: 'omit',
+      headers: {
+        apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
+  } catch {
+    throw new PublicApiError('Failed to fetch')
+  }
+  const body: unknown = await res.json().catch(() => null)
+  if (!res.ok) {
+    const err = (body ?? {}) as { code?: string; message?: string }
+    throw new PublicApiError(err.message ?? `Error ${res.status}`, err.code)
+  }
+  return body as T
+}

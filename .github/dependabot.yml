@@ -1,0 +1,19 @@
+# Dependabot: GitHub revisa cada semana si hay versiones nuevas (o parches de seguridad)
+# de las dependencias y abre un pull request por cada actualización. El CI las prueba
+# automáticamente antes de que alguien las acepte.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Las actualizaciones menores se agrupan en un solo PR para no llenar la bandeja.
+      menores:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -3,27 +3,34 @@
  * productos, notas y el botón grande de la siguiente acción (pensado para tablet).
  * - Pedido recién llegado: borde de color que pulsa unos segundos.
  * - Pedido "Nuevo" con más de 5 minutos sin confirmar: el tiempo se marca en ámbar.
+ * - "Confirmar" usa el tiempo habitual del local (un toque); otro tiempo se elige en el detalle.
+ * - En cocina muestra la hora estimada y, si ya pasó, cuántos minutos va atrasado (en rojo).
  */
-import { nextAction, optionNames, timeAgo, type AdminOrder, type OrderStatus } from '@/features/orders/api'
-import { formatCLP } from '@/lib/format'
+import { etaMinutesLeft, nextAction, optionNames, timeAgo, type AdminOrder, type OrderStatus } from '@/features/orders/api'
+import { formatCLP, formatTime } from '@/lib/format'
 
 type OrderCardProps = {
   order: AdminOrder
   now: number
   fresh: boolean
   busy: boolean
+  /** Tiempo habitual de preparación del local (para el botón Confirmar). */
+  prepMinutes: number
+  timeZone: string
   onAdvance: (status: OrderStatus) => void
+  onConfirm: () => void
   onOpen: () => void
 }
 
 /** Cuántas líneas de productos se muestran en la tarjeta antes de "y N más". */
 const MAX_LINES = 3
 
-export function OrderCard({ order, now, fresh, busy, onAdvance, onOpen }: OrderCardProps) {
+export function OrderCard({ order, now, fresh, busy, prepMinutes, timeZone, onAdvance, onConfirm, onOpen }: OrderCardProps) {
   const action = nextAction(order)
   const minutes = (now - new Date(order.created_at).getTime()) / 60_000
   const late = order.status === 'pending' && minutes > 5
   const extra = order.order_items.length - MAX_LINES
+  const left = etaMinutesLeft(order, now)
 
   return (
     <article
@@ -45,6 +52,13 @@ export function OrderCard({ order, now, fresh, busy, onAdvance, onOpen }: OrderC
             </p>
           </div>
         </div>
+        {left !== null && order.estimated_ready_at && (
+          <p className={`mt-2 text-xs font-semibold ${left < 0 ? 'text-red-700' : 'text-zinc-600'}`}>
+            {left < 0
+              ? `Atrasado ${-left} min (era ${formatTime(order.estimated_ready_at, timeZone)})`
+              : `Listo aprox. ${formatTime(order.estimated_ready_at, timeZone)} · en ${left} min`}
+          </p>
+        )}
         <p className="mt-2 truncate text-sm font-medium text-zinc-800">{order.customer_name}</p>
         <ul className="mt-1 space-y-0.5 text-sm text-zinc-700">
           {order.order_items.slice(0, MAX_LINES).map((it) => (
@@ -61,11 +75,11 @@ export function OrderCard({ order, now, fresh, busy, onAdvance, onOpen }: OrderC
         <div className="border-t border-zinc-100 p-2">
           <button
             type="button"
-            onClick={() => onAdvance(action.to)}
+            onClick={() => (order.status === 'pending' ? onConfirm() : onAdvance(action.to))}
             disabled={busy}
             className="flex min-h-12 w-full items-center justify-center rounded-lg bg-zinc-900 px-3 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
           >
-            {action.label}
+            {order.status === 'pending' ? `${action.label} · ${prepMinutes} min` : action.label}
           </button>
         </div>
       )}

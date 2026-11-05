@@ -5,9 +5,10 @@
  * El enlace del correo apunta a /admin/nueva-contrasena (ver ResetPasswordPage y
  * supabase/templates/recovery.html).
  */
-import { useState, type ChangeEvent, type FormEvent } from 'react'
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { isAuthError } from '@supabase/supabase-js'
+import { Captcha, type CaptchaHandle } from '@/components/Captcha'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
 import { InputField } from '@/components/ui/Field'
@@ -24,6 +25,9 @@ export default function ForgotPasswordPage() {
   const [submitting, setSubmitting] = useState(false)
   // Email al que se envió el enlace; cuando existe se muestra la confirmación.
   const [sentTo, setSentTo] = useState<string | null>(null)
+  // CAPTCHA: evita que un bot use este formulario para enviar correos masivos.
+  const captcha = useRef<CaptchaHandle>(null)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -33,18 +37,21 @@ export default function ForgotPasswordPage() {
       setErrors(fieldErrors(parsed.error))
       return
     }
+    if (!captchaToken) return
     setErrors({})
     setSubmitting(true)
     const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+      captchaToken,
       // Página donde el usuario crea la nueva contraseña. Debe estar en la lista
       // de URLs permitidas de Auth (additional_redirect_urls en config.toml).
       redirectTo: `${window.location.origin}/admin/nueva-contrasena`,
     })
     setSubmitting(false)
 
-    // Solo se informan los errores de límite de envío. Cualquier otro caso se trata
-    // como enviado, para no revelar qué emails tienen cuenta (enumeración de usuarios).
-    if (error && isAuthError(error) && error.code?.startsWith('over_')) {
+    // Solo se informan los errores de límite de envío y de CAPTCHA. Cualquier otro caso se
+    // trata como enviado, para no revelar qué emails tienen cuenta (enumeración de usuarios).
+    if (error && isAuthError(error) && (error.code?.startsWith('over_') || error.code === 'captcha_failed')) {
+      captcha.current?.reset()
       setFormError(authErrorMessage(error))
       return
     }
@@ -89,9 +96,11 @@ export default function ForgotPasswordPage() {
           onChange={(e: ChangeEvent<HTMLInputElement>) => setValues({ email: e.target.value })}
           error={errors.email}
         />
-        <Button type="submit" loading={submitting} className="w-full">
+        <Captcha ref={captcha} onToken={setCaptchaToken} />
+        <Button type="submit" loading={submitting} disabled={!captchaToken} className="w-full">
           Enviar enlace
         </Button>
+        {!captchaToken && <p className="text-center text-xs text-zinc-500">Verificando que eres una persona…</p>}
       </form>
     </AuthCard>
   )

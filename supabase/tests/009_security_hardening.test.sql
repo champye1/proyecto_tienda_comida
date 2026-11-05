@@ -1,9 +1,11 @@
 -- Controles de la migración 9: límite de pedidos por teléfono y URLs de imágenes seguras.
+-- Nota: los pedidos se crean como service_role, igual que la Edge Function place-order
+-- (que antes verifica el CAPTCHA). Ver tests/014 para el bloqueo de anon.
 begin;
 create extension if not exists pgtap with schema extensions;
 select plan(7);
 
-set local role anon;
+set local role service_role; -- desde la migración 14, solo la Edge Function place-order (service_role) crea pedidos
 
 -- Límite de pedidos ------------------------------------------------------------------
 -- Tres pedidos seguidos con el mismo teléfono se aceptan…

@@ -1,0 +1,82 @@
+# =============================================================================
+# CI: verifica cada push y cada pull request automáticamente.
+#
+#   app       → dependencias sin vulnerabilidades altas, tipos de TypeScript y build.
+#   database  → levanta Supabase local, aplica TODAS las migraciones desde cero + seed,
+#               y corre el linter SQL, las pruebas pgTAP (RLS, permisos, reglas de
+#               negocio) y las verificaciones por la API (Realtime, Storage, pedidos).
+#
+# Si algo falla, GitHub marca el commit en rojo y avisa por correo.
+# Seguridad: el workflow solo tiene permiso de LECTURA sobre el repositorio y no usa
+# ningún secreto real (Supabase local + claves de prueba públicas de Cloudflare).
+# =============================================================================
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Mínimo privilegio: el workflow no puede modificar el repositorio.
+permissions:
+  contents: read
+
+# Un push nuevo a la misma rama cancela la ejecución anterior (ahorra minutos).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: App (audit + tipos + build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Valores de desarrollo (públicos): el build los necesita para la CSP.
+      VITE_SUPABASE_URL: http://127.0.0.1:55321
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder_value
+      VITE_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Dependencias sin vulnerabilidades altas o críticas
+        run: npm audit --audit-level=high
+      - name: Tipos de TypeScript + build de producción
+        run: npm run build
+
+  database:
+    name: Base de datos (lint + pgTAP + API)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: Levantar Supabase local (solo lo que usan las pruebas)
+        run: npx supabase start -x studio,imgproxy,logflare,vector,supavisor,mailpit,postgres-meta
+
+      - name: Linter SQL
+        run: npx supabase db lint --level error
+
+      - name: Pruebas pgTAP
+        run: npx supabase test db
+
+      - name: Verificaciones por la API (Realtime, Storage, concurrencia)
+        run: |
+          eval "$(npx supabase status -o env | grep -E '^(API_URL|PUBLISHABLE_KEY|ANON_KEY)=')"
+          printf 'VITE_SUPABASE_URL=%s\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\n' "$API_URL" "${PUBLISHABLE_KEY:-$ANON_KEY}" > .env.local
+          # Realtime se reinicia con el seed: se le da un momento para quedar listo.
+          sleep 15
+          npm run verify:api
+
+      - name: Logs de Supabase (solo si algo falló)
+        if: failure()
+        run: docker ps -a && docker logs supabase_db_pedidos-saas --tail 200

@@ -11,6 +11,7 @@
  */
 import { MotionConfig } from 'motion/react'
 import { Link } from 'react-router'
+import { LegalLinks } from '@/components/LegalLinks'
 import { Faq } from './Faq'
 import { FeatureGrid } from './FeatureGrid'
 import { FeaturesSticky } from './FeaturesSticky'
@@ -76,7 +77,7 @@ function Footer() {
           <span className="font-semibold text-zinc-700">Pedidos</span>
           <span>· Hecho en Chile</span>
         </div>
-        <nav aria-label="Pie de página" className="flex gap-5">
+        <nav aria-label="Pie de página" className="flex flex-wrap justify-center gap-5">
           <a href="#funciones" className="hover:text-zinc-900">
             Funciones
           </a>
@@ -86,6 +87,7 @@ function Footer() {
           <Link to="/admin/login" className="hover:text-zinc-900">
             Iniciar sesión
           </Link>
+          <LegalLinks />
         </nav>
       </div>
     </footer>

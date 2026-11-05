@@ -20,6 +20,10 @@ const envSchema = z.object({
   VITE_SUPABASE_URL: z.url(),
   /** Clave publicable de Supabase. Es pública por diseño: la seguridad la da RLS. */
   VITE_SUPABASE_PUBLISHABLE_KEY: z.string().min(20),
+  /** Clave PÚBLICA (site key) de Cloudflare Turnstile para el CAPTCHA. En desarrollo, la de prueba. */
+  VITE_TURNSTILE_SITE_KEY: z.string().min(10),
+  /** DSN de Sentry para el monitoreo de errores. Opcional: vacío = monitoreo desactivado. */
+  VITE_SENTRY_DSN: z.preprocess((v) => (v === '' ? undefined : v), z.url().optional()),
 })
 
 const parsed = envSchema.safeParse(import.meta.env)

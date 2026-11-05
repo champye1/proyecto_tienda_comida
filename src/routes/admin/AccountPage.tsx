@@ -4,9 +4,10 @@
  * Para cambiar la contraseña se exige la actual: así alguien que encuentre la
  * tablet de cocina con la sesión abierta no puede apropiarse de la cuenta.
  */
-import { useState, type ChangeEvent, type FormEvent } from 'react'
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { isAuthError } from '@supabase/supabase-js'
+import { Captcha, type CaptchaHandle } from '@/components/Captcha'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
 import { InputField } from '@/components/ui/Field'
@@ -26,6 +27,9 @@ export default function AccountPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  // CAPTCHA: la verificación de la contraseña actual es un login, y Supabase Auth lo exige.
+  const captcha = useRef<CaptchaHandle>(null)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
 
   const set = (field: keyof ChangePasswordValues) => (e: ChangeEvent<HTMLInputElement>) =>
     setValues((v) => ({ ...v, [field]: e.target.value }))
@@ -39,12 +43,19 @@ export default function AccountPage() {
       setErrors(fieldErrors(parsed.error))
       return
     }
+    if (!captchaToken) return
     setErrors({})
     setSubmitting(true)
 
     // 1. Comprobar la contraseña actual volviendo a iniciar sesión con ella.
     //    (Mismo usuario: AuthProvider no limpia la caché.)
-    const check = await supabase.auth.signInWithPassword({ email, password: parsed.data.currentPassword })
+    const check = await supabase.auth.signInWithPassword({
+      email,
+      password: parsed.data.currentPassword,
+      options: { captchaToken },
+    })
+    // El token ya se usó (salga bien o mal): se pide uno nuevo para el próximo intento.
+    captcha.current?.reset()
     if (check.error) {
       setSubmitting(false)
       if (isAuthError(check.error) && check.error.code === 'invalid_credentials') {
@@ -104,7 +115,8 @@ export default function AccountPage() {
             error={errors.confirmPassword}
           />
           <div className="flex flex-wrap items-center gap-4">
-            <Button type="submit" loading={submitting}>
+            <Captcha ref={captcha} onToken={setCaptchaToken} />
+            <Button type="submit" loading={submitting} disabled={!captchaToken}>
               Guardar nueva contraseña
             </Button>
             {/* Si no recuerda la actual, el camino es el correo de recuperación. */}

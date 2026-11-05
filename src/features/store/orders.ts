@@ -1,11 +1,11 @@
 /**
- * Pedidos desde la tienda: crear (RPC create_order), seguir (RPC get_order_by_token)
+ * Pedidos desde la tienda: crear (Edge Function place-order, con CAPTCHA), seguir (RPC get_order_by_token)
  * y recordar los datos del cliente en este dispositivo (opcional).
  */
 import { queryOptions } from '@tanstack/react-query'
 import { z } from 'zod'
-import { publicRpc } from '@/lib/publicApi'
-import type { Enums } from '@/types/database.types'
+import { publicFunction, publicRpc } from '@/lib/publicApi'
+import type { Database, Enums } from '@/types/database.types'
 import type { CartLine } from './cart'
 
 export type OrderType = Enums<'order_type'>
@@ -37,25 +37,35 @@ export const checkoutSchema = z
 
 export type CheckoutValues = z.input<typeof checkoutSchema>
 
+/** Respuesta de la Edge Function place-order (una fila de create_order). */
+export type PlacedOrder = Database['public']['Functions']['create_order']['Returns'][number]
+
 /**
- * Crea el pedido. Solo viajan ids y cantidades: los precios los calcula el servidor.
+ * Crea el pedido a través de la Edge Function `place-order`, que primero verifica el
+ * CAPTCHA con Cloudflare y recién entonces llama a create_order (la RPC ya no es
+ * invocable directamente desde el navegador: migración order_captcha_gate).
+ * Solo viajan ids y cantidades: los precios los calcula el servidor.
  * Devuelve el número de pedido y el token secreto para la página de seguimiento.
  */
-export async function createOrder(slug: string, values: z.output<typeof checkoutSchema>, lines: CartLine[]) {
-  const data = await publicRpc('create_order', {
-    p_restaurant_slug: slug,
-    p_customer_name: values.name,
-    p_customer_phone: values.phone,
-    p_type: values.type,
-    // create_order acepta NULL (los tipos generados no lo reflejan): sin dirección en retiro.
-    p_address: (values.type === 'delivery' ? values.address : null) as string,
-    p_notes: (values.notes || null) as string,
-    p_payment_method: values.payment_method,
-    p_items: lines.map((l) => ({ product_id: l.productId, quantity: l.quantity, option_ids: l.optionIds })),
+export async function createOrder(
+  slug: string,
+  values: z.output<typeof checkoutSchema>,
+  lines: CartLine[],
+  captchaToken: string,
+): Promise<PlacedOrder> {
+  return publicFunction<PlacedOrder>('place-order', {
+    captchaToken,
+    order: {
+      p_restaurant_slug: slug,
+      p_customer_name: values.name,
+      p_customer_phone: values.phone,
+      p_type: values.type,
+      p_address: values.type === 'delivery' ? values.address : null, // sin dirección en retiro
+      p_notes: values.notes || null,
+      p_payment_method: values.payment_method,
+      p_items: lines.map((l) => ({ product_id: l.productId, quantity: l.quantity, option_ids: l.optionIds })),
+    },
   })
-  const order = data[0]
-  if (!order) throw new Error('No se recibió la confirmación del pedido.')
-  return order
 }
 
 // -----------------------------------------------------------------------------
@@ -106,12 +116,14 @@ const trackedOrderSchema = z.object({
   total: z.number().int(),
   created_at: z.string(),
   updated_at: z.string(),
+  estimated_ready_at: z.string().nullable(),
   restaurant: z.object({
     name: z.string(),
     slug: z.string(),
     logo_url: z.string().nullable(),
     phone: z.string().nullable(),
     primary_color: z.string(),
+    timezone: z.string(),
   }),
   items: z.array(
     z.object({

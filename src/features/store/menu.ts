@@ -9,6 +9,7 @@
  */
 import { queryOptions } from '@tanstack/react-query'
 import { z } from 'zod'
+import { parseWeekHours } from '@/lib/openingHours'
 import { publicRpc } from '@/lib/publicApi'
 
 const optionSchema = z.object({
@@ -43,10 +44,16 @@ const restaurantSchema = z.object({
   phone: z.string().nullable(),
   address: z.string().nullable(),
   is_open: z.boolean(),
+  /** Solo el interruptor del local (is_open ya combina interruptor y horario). */
+  is_open_manual: z.boolean(),
   delivery_enabled: z.boolean(),
   pickup_enabled: z.boolean(),
   delivery_fee: z.number().int().min(0),
   min_order: z.number().int().min(0),
+  // Horario (etapa A). Se valida aparte con parseWeekHours: si viniera mal, se ignora.
+  opening_hours: z.unknown().transform(parseWeekHours),
+  timezone: z.string(),
+  prep_time_minutes: z.number().int(),
 })
 
 export const publicMenuSchema = z.object({

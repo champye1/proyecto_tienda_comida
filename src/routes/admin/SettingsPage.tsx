@@ -3,6 +3,7 @@
  *
  * - Datos que ve el cliente: nombre, descripción, teléfono, dirección, logo y color.
  * - Cómo vende: retiro en local y/o delivery, costo de envío y pedido mínimo.
+ * - Horario de atención, zona horaria y tiempo de preparación (OpeningHoursCard, se guarda aparte).
  * - Solo el dueño puede guardar (la RLS de restaurants también lo exige); el personal
  *   ve los datos en modo lectura.
  * - El logo se procesa igual que las fotos (WebP, sin metadatos, nombre aleatorio) y el
@@ -25,6 +26,7 @@ import { contrastColor } from '@/features/store/appearance'
 import { dbErrorMessage } from '@/lib/errors'
 import { fieldErrors, type FieldErrors } from '@/lib/forms'
 import { supabase } from '@/lib/supabase'
+import { OpeningHoursCard } from './OpeningHoursCard'
 
 /** Tamaño máximo del logo (px): se muestra pequeño, no necesita más. */
 const LOGO_SIZE = 512
@@ -251,6 +253,8 @@ export default function SettingsPage() {
           </div>
         )}
       </form>
+
+      <OpeningHoursCard restaurant={restaurant} />
     </div>
   )
 }

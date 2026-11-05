@@ -5,6 +5,7 @@
 import { useNavigate } from 'react-router'
 import { QuantityStepper } from '@/components/ui/QuantityStepper'
 import { Sheet } from '@/components/ui/Sheet'
+import { useStoreOpen } from '@/features/store/useStoreOpen'
 import { formatCLP } from '@/lib/format'
 import { useStore } from './StoreRoot'
 
@@ -12,6 +13,7 @@ export function CartSheet({ open, onClose }: { open: boolean; onClose: () => voi
   const { slug, menu, cart, lines, subtotal } = useStore()
   const navigate = useNavigate()
   const { restaurant } = menu
+  const { open: storeOpen, opensAt } = useStoreOpen(restaurant)
   const missing = Math.max(0, restaurant.min_order - subtotal)
 
   return (
@@ -60,10 +62,14 @@ export function CartSheet({ open, onClose }: { open: boolean; onClose: () => voi
                 Agrega {formatCLP(missing)} más para alcanzar el pedido mínimo de {formatCLP(restaurant.min_order)}.
               </p>
             )}
-            {!restaurant.is_open && <p className="rounded-lg bg-zinc-100 px-3 py-2 text-sm text-zinc-700">El local está cerrado: por ahora no recibe pedidos.</p>}
+            {!storeOpen && (
+              <p className="rounded-lg bg-zinc-100 px-3 py-2 text-sm text-zinc-700">
+                El local está cerrado{opensAt ? ` y abre ${opensAt}` : ''}: por ahora no recibe pedidos.
+              </p>
+            )}
             <button
               type="button"
-              disabled={missing > 0 || !restaurant.is_open}
+              disabled={missing > 0 || !storeOpen}
               onClick={() => {
                 onClose()
                 navigate(`/r/${slug}/checkout`)
