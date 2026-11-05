@@ -38,7 +38,7 @@ jobs:
       VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder_value
       VITE_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 24
