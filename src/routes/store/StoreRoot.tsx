@@ -35,6 +35,7 @@ export function useStore(): StoreState {
   return ctx
 }
 
+/** Raíz de la tienda: carga el menú y comparte menú y carrito con sus páginas. */
 export default function StoreRoot() {
   const { slug = '' } = useParams()
   const query = useQuery(publicMenuQuery(slug))
@@ -70,6 +71,9 @@ function StoreProvider({ slug, menu }: { slug: string; menu: PublicMenu }) {
   useEffect(() => {
     if (dropped === 0) return
     cart.keepOnly(new Set(resolved.map((l) => l.key)))
+    // Excepción justificada: el efecto sincroniza el carrito guardado (sistema externo) y avisa
+    // una sola vez; después de keepOnly, "dropped" vuelve a 0 y no se repite.
+    // oxlint-disable-next-line react/set-state-in-effect
     setDroppedNotice(true)
   }, [dropped, resolved, cart])
 

@@ -14,7 +14,10 @@ import { supabase } from '@/lib/supabase'
 import type { Enums, Json, Tables } from '@/types/database.types'
 
 export type OrderStatus = Enums<'order_status'>
-export type OrderItem = Pick<Tables<'order_items'>, 'id' | 'product_name' | 'quantity' | 'unit_price' | 'line_total' | 'selected_options'>
+export type OrderItem = Pick<
+  Tables<'order_items'>,
+  'id' | 'product_name' | 'quantity' | 'unit_price' | 'line_total' | 'selected_options' | 'discount' | 'promotion_name'
+>
 export type AdminOrder = Tables<'orders'> & { order_items: OrderItem[] }
 
 /** Estados que se muestran en el tablero (los demás ya terminaron). */
@@ -23,8 +26,9 @@ const ACTIVE_LIMIT = 200
 export const HISTORY_PAGE_SIZE = 20
 
 /** Pedido + sus ítems en una sola consulta (join de PostgREST). */
-const ORDER_SELECT = '*, order_items(id, product_name, quantity, unit_price, line_total, selected_options)'
+const ORDER_SELECT = '*, order_items(id, product_name, quantity, unit_price, line_total, selected_options, discount, promotion_name)'
 
+/** Query keys de los pedidos del panel (todos, en curso e historial) por restaurante. */
 export const orderKeys = {
   all: (rid: string) => ['orders', rid] as const,
   active: (rid: string) => ['orders', rid, 'active'] as const,
@@ -140,6 +144,33 @@ export function useSetOrderEstimate(rid: string) {
   })
 }
 
+/** El local confirma que recibió la transferencia (RPC verify_payment). */
+export function useVerifyPayment(rid: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.rpc('verify_payment', { p_order_id: id })
+      if (error) throw error
+      return data
+    },
+    onSuccess: (updated) => replaceActive(queryClient, rid, updated),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: orderKeys.history(rid) }),
+  })
+}
+
+/**
+ * Abre el comprobante de transferencia en otra pestaña con una URL firmada de 60 s
+ * (el bucket es privado: solo los miembros del local pueden generarla).
+ */
+export async function openReceipt(path: string) {
+  const { data, error } = await supabase.storage.from('payment-receipts').createSignedUrl(path, 60)
+  if (error || !data) throw error ?? new Error('No se pudo abrir el comprobante')
+  window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+}
+
+/** Texto del estado del pago por transferencia. */
+export const PAYMENT_LABEL = { unpaid: 'Transferencia sin informar', reported: 'Transferencia informada: revisa tu banco', verified: 'Pago verificado' } as const
+
 /** Opciones rápidas de tiempo al confirmar (se suma el tiempo habitual del local si no está). */
 export function etaChoices(prepMinutes: number): number[] {
   return [...new Set([10, 15, 20, 30, 45, 60, prepMinutes])].sort((a, b) => a - b)
@@ -211,6 +242,7 @@ export function optionNames(selected: Json): string {
 
 /** "hace 3 min", "hace 1 h"… */
 const relative = new Intl.RelativeTimeFormat('es-CL', { numeric: 'auto' })
+/** Tiempo transcurrido en texto corto: "recién", "hace 3 min", "hace 1 h" o la fecha. */
 export function timeAgo(iso: string, now: number): string {
   const minutes = Math.round((now - new Date(iso).getTime()) / 60_000)
   if (minutes < 1) return 'recién'

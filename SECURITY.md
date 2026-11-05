@@ -42,6 +42,16 @@ Ocultar un botón en la pantalla no es un control de seguridad.
 | Slugs reservados (`www`, `admin`, `api`…) para los futuros subdominios | `…0800` | `tests/008` |
 | Imágenes solo del Storage propio: `image_url`/`logo_url` deben apuntar a la carpeta del mismo restaurante | `…1000` | `tests/010` |
 | Horario de atención: pedidos fuera de horario rechazados por trigger en `orders` (cualquier camino de inserción); horario validado por trigger (7 días, máx. 3 tramos, `HH:MM`, sin campos extra); zonas horarias en lista blanca; solo el dueño lo edita | `…daily_operations` (15) | `tests/015` |
+| Equipo solo por invitación: se quitó el INSERT directo en `restaurant_members` (antes un dueño podía agregar a cualquier usuario sin su consentimiento). Invitación con token de 192 bits guardado como **hash SHA-256**, de un solo uso, vence en 7 días, exige iniciar sesión con el email invitado y confirmado | `…team_and_insights` (16) | `tests/016` |
+| Datos de clientes (`get_customers`) y reporte ampliado (hasta 1 año): solo miembros del restaurante; equipo con emails (`get_team`): solo el dueño | `…team_and_insights` (16) | `tests/016` |
+| Descuentos calculados SOLO en `create_order`: promociones (FK compuestas: no pueden apuntar a otro restaurante) y cupones (no legibles por la API pública; uso contado con la fila bloqueada `FOR UPDATE`; "Cupón no válido" idéntico para inexistente y personal de otro teléfono) | `…sell_more` (17) | `tests/017` |
+| Pedidos programados: dentro del horario, con anticipación mínima y máxima | `…sell_more` (17) | `tests/017` |
+| `place-order` reenvía a `create_order` solo una lista blanca de parámetros | `functions/place-order` | `verify:api` |
+| Sellos de fidelización solo por trigger (nadie los escribe por la API); premio = cupón personal de un uso con vencimiento | `…loyalty_reviews` (18) | `tests/018` |
+| Cupón "vuelve" solo para clientes reales del local, 5–50 %, un uso, 14 días; solo el dueño | `…loyalty_reviews` (18) | `tests/018` |
+| Reseñas con el token del pedido, solo entregados, una por pedido; texto plano (React lo escapa); link de Google solo `https://` | `…loyalty_reviews` (18) | `tests/018`, E2E |
+| Pago por transferencia: estado que solo avanza (`unpaid → reported → verified`, también para service_role); la ruta del comprobante la registra solo service_role y debe estar en la carpeta del pedido | `…payments` (19) | `tests/019` |
+| Propina solo si el local la acepta (trigger); los reportes la excluyen de las ventas | `…payments` (19) | `tests/019` |
 | Tiempo estimado: solo por `confirm_order` / `set_order_estimate` (miembros del restaurante, 1–240 min); la guardia de `orders` solo admite cambiarlo en pedidos confirmados o en preparación, incluso a service_role | `…daily_operations` (15) | `tests/015` |
 | Reporte de ventas por `get_sales_report`: SECURITY INVOKER + verificación explícita de membresía (error claro, no un reporte vacío), rango máx. 31 días | `…0100_sales_report` | `tests/013` |
 | Menú público por `get_public_menu`: SECURITY INVOKER (aplica RLS), solo lo publicado y sin campos internos | `…0100_public_menu` | `tests/011` |
@@ -127,6 +137,19 @@ Fuente única: `security/headers.ts`.
 - La comanda impresa contiene datos del cliente: se imprime solo desde el panel (sesión de un miembro) y nunca se guarda.
 - El manifest de la PWA tiene alcance `/admin/`: a los clientes de la tienda no se les ofrece instalar el panel.
 
+### Comprobantes de transferencia (Edge Function `upload-receipt`)
+- Bucket **privado** `payment-receipts` (2 MB, solo imágenes). Sin políticas de escritura: solo la función (service_role) sube.
+- La función exige el token del pedido, valida el **tipo real por sus primeros bytes** (no el Content-Type), tamaño, que el
+  pedido sea por transferencia, no cancelado y no verificado; guarda en `{restaurant_id}/{order_id}/{uuid}` y borra el anterior.
+- El navegador re-codifica la foto a WebP (sin EXIF ni contenido oculto) antes de enviarla.
+- El local la ve con URL firmada de 60 s (política SELECT solo para miembros de ese restaurante).
+- Probado: token falso/mal formado, HTML disfrazado de PNG, > 2 MB, pedido en efectivo, lectura anónima del bucket.
+
+### Exportaciones a Excel (CSV)
+- **Inyección de fórmulas** neutralizada: toda celda que empieza con `= + - @` o tabulador se antepone con `'`
+  (un cliente no puede colar `=HYPERLINK(...)` en su nombre o nota). Probado con casos maliciosos.
+- Se generan en el navegador con la sesión del usuario: la RLS limita los datos a su restaurante.
+
 ### Vista previa al compartir (Edge Function `og`)
 - Nombre y descripción del restaurante se **escapan como HTML** (probado con `<script>` y `onerror`).
 - El slug se valida con la misma regla de la base **antes** de usarlo en la consulta (sin inyección en filtros de PostgREST).
@@ -159,6 +182,10 @@ Fuente única: `security/headers.ts`.
 | CORS de `place-order`: en local el gateway (Kong) agrega `Access-Control-Allow-Origin: *` a todas las respuestas | CORS no es una barrera de seguridad para este endpoint (es público); la barrera es el CAPTCHA. En producción la función responde con `SITE_URL` |
 | El script de Turnstile se carga desde Cloudflare (tercero con ejecución de JS en la página) | Proveedor necesario para el CAPTCHA; limitado por CSP a ese único origen |
 | `npm audit` reporta vulnerabilidades moderadas/bajas en la cadena de build de `vite-plugin-pwa` (workbox-build, glob, ejs…) | Solo se ejecutan en el build, no llegan al navegador. La única corrección es bajar de versión mayor; se revisan con Dependabot |
+| Teléfonos no verificados (sin SMS): alguien podría pedir con el teléfono de otra persona y sumar sellos o usar un cupón "solo primera compra" | Premios y cupones personales son de un solo uso y de monto acotado. Mitigación futura: verificación por SMS/WhatsApp |
+| `check_coupon` es pública: un bot podría probar códigos | Los cupones de campaña no son secretos; los personales son aleatorios (6 caracteres de 32 símbolos) y ligados a un teléfono. Falta: límite por IP en el WAF |
+| Los datos de transferencia del local son públicos en la tienda | Intencional (como los que se publican en Instagram); nunca se piden claves ni tarjetas |
+| El link de invitación viaja por WhatsApp | Vence en 7 días, es de un solo uso y solo sirve con la cuenta del email invitado |
 | El simulacro de restauración se hizo en local (mismo esquema) | Repetirlo contra un proyecto Supabase nuevo antes del lanzamiento y luego cada 6 meses |
 | Realtime envía a anónimos un evento **vacío** (401) cuando se crea un pedido | No contiene datos. Se elimina pasando a Realtime Broadcast con canales privados |
 | El canal de seguimiento `order:{token}` es público: quien tenga el link del pedido podría enviar mensajes al canal | El mensaje solo dispara una consulta al servidor; el estado mostrado siempre es el real. Alternativa futura: canales privados con autorización de Realtime |
@@ -177,6 +204,7 @@ Fuente única: `security/headers.ts`.
 - [ ] **CAPTCHA:** crear el widget en Cloudflare → Turnstile con el dominio real. Poner la *site key* en `VITE_TURNSTILE_SITE_KEY`,
       y la *secret key* en Auth → Bot and Abuse Protection (Turnstile) **y** como secreto de la función:
       `supabase secrets set TURNSTILE_SECRET_KEY=… SITE_URL=https://…` (sin `ALLOW_LOCALHOST_ORIGINS`).
+- [ ] Desplegar también `supabase functions deploy upload-receipt --no-verify-jwt` (comprobantes de transferencia).
 - [ ] Desplegar la función: `supabase functions deploy place-order --no-verify-jwt` y aplicar la migración `order_captcha_gate`
       **después** (si no, la tienda queda sin poder crear pedidos).
 - [ ] Activar **protección de contraseñas filtradas** (HaveIBeenPwned; plan Pro).
@@ -219,7 +247,10 @@ Fuente única: `security/headers.ts`.
 ## 6. Cómo verificar
 
 ```bash
-npm run db:reset && npm run db:test   # 206 pruebas pgTAP (RLS, permisos, reglas de negocio, controles)
+npm run lint                          # oxlint: incluye no-danger (sin HTML crudo) y no-eval
+npm test                              # unitarias: inyección de fórmulas en CSV, precios, horarios
+npm run db:reset && npm run db:test   # 300 pruebas pgTAP (RLS, permisos, reglas de negocio, controles)
+npm run test:e2e                      # navegador: CAPTCHA, CSP sin violaciones, monitoreo sin PII, flujos completos
 npm run verify:api                    # Realtime + RLS, concurrencia, Storage y CAPTCHA de pedidos por la API
 npm run db:backup                     # respaldo local (con BACKUP_PASSPHRASE, cifrado)
 npx supabase db lint                  # funciones SQL

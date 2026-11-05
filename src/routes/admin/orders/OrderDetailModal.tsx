@@ -22,6 +22,9 @@ import {
   useConfirmOrder,
   useSetOrderEstimate,
   useUpdateOrderStatus,
+  useVerifyPayment,
+  openReceipt,
+  PAYMENT_LABEL,
   type AdminOrder,
 } from '@/features/orders/api'
 import { KitchenTicket, readAutoPrint, saveAutoPrint } from '@/features/orders/KitchenTicket'
@@ -36,6 +39,7 @@ type OrderDetailModalProps = {
   onClose: () => void
 }
 
+/** Ventana con el detalle completo de un pedido y sus acciones. */
 export function OrderDetailModal({ rid, order, onClose }: OrderDetailModalProps) {
   return (
     <Modal open={order !== null} onClose={onClose} title={order ? `Pedido #${order.order_number}` : 'Pedido'} size="md">
@@ -49,13 +53,15 @@ function OrderDetail({ rid, order, onClose }: { rid: string; order: AdminOrder; 
   const update = useUpdateOrderStatus(rid)
   const confirm = useConfirmOrder(rid)
   const estimate = useSetOrderEstimate(rid)
+  const verify = useVerifyPayment(rid)
+  const [receiptError, setReceiptError] = useState<string | null>(null)
   const { print, portal } = usePrint()
   const now = useNow()
   const [minutes, setMinutes] = useState(restaurant.prep_time_minutes)
   const [autoPrint, setAutoPrint] = useState(readAutoPrint)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const left = etaMinutesLeft(order, now)
-  const error = update.error ?? confirm.error ?? estimate.error
+  const error = update.error ?? confirm.error ?? estimate.error ?? verify.error
 
   const printTicket = (o: AdminOrder) =>
     print(<KitchenTicket order={o} restaurantName={restaurant.name} timeZone={restaurant.timezone} />)
@@ -96,6 +102,12 @@ function OrderDetail({ rid, order, onClose }: { rid: string; order: AdminOrder; 
         <span className="text-zinc-500">{formatDateTime(order.created_at, restaurant.timezone)}</span>
       </div>
 
+      {order.scheduled_for && (
+        <p className="rounded-xl bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-900">
+          Pedido programado para el {formatDateTime(order.scheduled_for, restaurant.timezone)}
+        </p>
+      )}
+
       {left !== null && order.estimated_ready_at && (
         <section className="flex flex-wrap items-center gap-2 rounded-xl bg-zinc-50 p-3 text-sm">
           <span className={left < 0 ? 'font-semibold text-red-700' : 'font-semibold text-zinc-800'}>
@@ -114,6 +126,31 @@ function OrderDetail({ rid, order, onClose }: { rid: string; order: AdminOrder; 
               </button>
             ))}
           </span>
+        </section>
+      )}
+
+      {order.payment_method === 'transfer' && (
+        <section className="flex flex-wrap items-center gap-2 rounded-xl bg-zinc-50 p-3 text-sm" aria-label="Pago por transferencia">
+          <span className={`font-semibold ${order.payment_status === 'verified' ? 'text-emerald-700' : 'text-zinc-800'}`}>
+            {PAYMENT_LABEL[order.payment_status as keyof typeof PAYMENT_LABEL]}
+          </span>
+          <span className="ml-auto flex flex-wrap gap-2">
+            {order.payment_receipt_path && (
+              <button
+                type="button"
+                onClick={() => openReceipt(order.payment_receipt_path ?? '').catch(() => setReceiptError('No se pudo abrir el comprobante.'))}
+                className="min-h-10 rounded-lg border border-zinc-300 bg-white px-3 font-semibold hover:bg-zinc-100"
+              >
+                Ver comprobante
+              </button>
+            )}
+            {order.payment_status !== 'verified' && order.status !== 'cancelled' && (
+              <Button variant="secondary" onClick={() => verify.mutate(order.id)} loading={verify.isPending}>
+                Marcar pago verificado
+              </Button>
+            )}
+          </span>
+          {receiptError && <p className="w-full text-red-600">{receiptError}</p>}
         </section>
       )}
 
@@ -152,6 +189,7 @@ function OrderDetail({ rid, order, onClose }: { rid: string; order: AdminOrder; 
               <span>
                 <span className="font-semibold">{it.quantity}×</span> {it.product_name}
                 {optionNames(it.selected_options) && <span className="block text-zinc-500">{optionNames(it.selected_options)}</span>}
+                {it.promotion_name && <span className="block text-emerald-700">{it.promotion_name}: −{formatCLP(it.discount)}</span>}
               </span>
               <span className="shrink-0 tabular-nums">{formatCLP(it.line_total)}</span>
             </li>
@@ -162,6 +200,18 @@ function OrderDetail({ rid, order, onClose }: { rid: string; order: AdminOrder; 
             <div className="flex justify-between">
               <dt>Delivery</dt>
               <dd className="tabular-nums">{formatCLP(order.delivery_fee)}</dd>
+            </div>
+          )}
+          {order.discount > 0 && (
+            <div className="flex justify-between text-emerald-700">
+              <dt>Cupón {order.coupon_code}</dt>
+              <dd className="tabular-nums">−{formatCLP(order.discount)}</dd>
+            </div>
+          )}
+          {order.tip > 0 && (
+            <div className="flex justify-between">
+              <dt>Propina</dt>
+              <dd className="tabular-nums">{formatCLP(order.tip)}</dd>
             </div>
           )}
           <div className="flex justify-between text-base font-bold">

@@ -22,6 +22,10 @@ const NAV_ITEMS = [
   { to: '/admin/pedidos', label: 'Pedidos', end: false },
   { to: '/admin/menu', label: 'Menú', end: false },
   { to: '/admin/reportes', label: 'Reportes', end: false },
+  { to: '/admin/promociones', label: 'Promociones', end: false },
+  { to: '/admin/clientes', label: 'Clientes', end: false },
+  { to: '/admin/resenas', label: 'Reseñas', end: false },
+  { to: '/admin/equipo', label: 'Equipo', end: false },
   { to: '/admin/local', label: 'Mi local', end: false },
   { to: '/admin/cuenta', label: 'Mi cuenta', end: false },
 ] as const

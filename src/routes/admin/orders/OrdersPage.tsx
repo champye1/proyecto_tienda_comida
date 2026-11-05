@@ -31,6 +31,7 @@ import { KitchenTicket, readAutoPrint } from '@/features/orders/KitchenTicket'
 import { OrderCard } from './OrderCard'
 import { OrderDetailModal } from './OrderDetailModal'
 
+/** Página de pedidos: tablero en vivo e historial. */
 export default function OrdersPage() {
   const { restaurant } = useCurrentRestaurant()
   const { orders, isLoading, error, live, sound } = useOrdersLive()
@@ -129,6 +130,8 @@ function Board({ orders, onOpen }: { orders: AdminOrder[]; onOpen: (o: AdminOrde
     confirm.mutate(
       { id: o.id, minutes: restaurant.prep_time_minutes },
       {
+        // Falso positivo del linter: el callback crea un elemento JSX para print(), no un componente.
+        // oxlint-disable-next-line react/no-unstable-nested-components
         onSuccess: (updated) => {
           if (readAutoPrint()) {
             print(<KitchenTicket order={{ ...o, ...updated }} restaurantName={restaurant.name} timeZone={restaurant.timezone} />)

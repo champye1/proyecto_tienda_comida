@@ -30,8 +30,8 @@ select lives_ok(
 
 reset role;
 select ok(
-  not has_function_privilege('anon', 'public.create_order(text, text, text, public.order_type, text, text, public.payment_method, jsonb)', 'EXECUTE')
-  and not has_function_privilege('authenticated', 'public.create_order(text, text, text, public.order_type, text, text, public.payment_method, jsonb)', 'EXECUTE'),
+  not has_function_privilege('anon', 'public.create_order(text, text, text, public.order_type, text, text, public.payment_method, jsonb, text, timestamptz, integer)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.create_order(text, text, text, public.order_type, text, text, public.payment_method, jsonb, text, timestamptz, integer)', 'EXECUTE'),
   'Permisos: create_order sin EXECUTE para anon ni authenticated'
 );
 

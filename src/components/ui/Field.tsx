@@ -2,11 +2,12 @@
  * Campos de formulario con etiqueta, ayuda y mensaje de error:
  *   - InputField    → <input>
  *   - TextareaField → <textarea>
+ *   - SelectField   → <select> (las opciones van como hijos)
  *
  * Se encargan de la accesibilidad: el <label> queda asociado al campo, y el error o
  * la ayuda se vinculan con aria-describedby para que los lectores de pantalla los lean.
  */
-import { useId, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react'
+import { useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
 
 // text-base (16 px) en celular: con menos, iOS hace zoom automático al tocar el campo.
 const inputClass =
@@ -89,6 +90,34 @@ export function TextareaField({ label, error, hint, id, className = '', ...props
         aria-describedby={error ? `${fieldId}-error` : hint ? `${fieldId}-hint` : undefined}
         className={`${inputClass} ${stateClass(error)} ${className}`}
       />
+    </FieldShell>
+  )
+}
+
+type SelectFieldProps = SelectHTMLAttributes<HTMLSelectElement> & {
+  label: string
+  error?: string
+  hint?: ReactNode
+}
+
+/**
+ * Lista desplegable. La etiqueta se asocia con htmlFor (no envolviendo el <select>): así el
+ * nombre accesible es solo la etiqueta, sin el texto de la opción elegida pegado.
+ */
+export function SelectField({ label, error, hint, id, className = '', children, ...props }: SelectFieldProps) {
+  const autoId = useId()
+  const fieldId = id ?? autoId
+  return (
+    <FieldShell id={fieldId} label={label} error={error} hint={hint}>
+      <select
+        {...props}
+        id={fieldId}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${fieldId}-error` : hint ? `${fieldId}-hint` : undefined}
+        className={`block min-h-11 w-full rounded-lg border bg-white px-3 text-base text-zinc-900 focus:outline-none focus:ring-2 sm:text-sm ${stateClass(error)} ${className}`}
+      >
+        {children}
+      </select>
     </FieldShell>
   )
 }

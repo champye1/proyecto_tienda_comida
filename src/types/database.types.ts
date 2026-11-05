@@ -42,6 +42,105 @@ export type Database = {
           },
         ];
       };
+      coupons: {
+        Row: {
+          code: string;
+          created_at: string;
+          customer_phone: string | null;
+          ends_at: string | null;
+          first_order_only: boolean;
+          id: string;
+          is_active: boolean;
+          kind: string;
+          max_uses: number | null;
+          min_subtotal: number;
+          restaurant_id: string;
+          starts_at: string | null;
+          updated_at: string;
+          uses: number;
+          value: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          code: string;
+          created_at?: string;
+          customer_phone?: string | null;
+          ends_at?: string | null;
+          first_order_only?: boolean;
+          id?: string;
+          is_active?: boolean;
+          kind: string;
+          max_uses?: number | null;
+          min_subtotal?: number;
+          restaurant_id: string;
+          starts_at?: string | null;
+          updated_at?: string;
+          uses?: number;
+          value?: number;
+        };
+        Update: {
+          code?: string;
+          created_at?: string;
+          customer_phone?: string | null;
+          ends_at?: string | null;
+          first_order_only?: boolean;
+          id?: string;
+          is_active?: boolean;
+          kind?: string;
+          max_uses?: number | null;
+          min_subtotal?: number;
+          restaurant_id?: string;
+          starts_at?: string | null;
+          updated_at?: string;
+          uses?: number;
+          value?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "coupons_restaurant_id_fkey";
+            columns: ["restaurant_id"];
+            isOneToOne: false;
+            referencedRelation: "restaurants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      loyalty_cards: {
+        Row: {
+          created_at: string;
+          phone: string;
+          restaurant_id: string;
+          rewards_issued: number;
+          stamps: number;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          phone: string;
+          restaurant_id: string;
+          rewards_issued?: number;
+          stamps?: number;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          phone?: string;
+          restaurant_id?: string;
+          rewards_issued?: number;
+          stamps?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_cards_restaurant_id_fkey";
+            columns: ["restaurant_id"];
+            isOneToOne: false;
+            referencedRelation: "restaurants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       option_groups: {
         Row: {
           created_at: string;
@@ -179,12 +278,14 @@ export type Database = {
       order_items: {
         Row: {
           created_at: string;
+          discount: number;
           id: string;
           line_total: number;
           order_created_at: string;
           order_id: string;
           product_id: string | null;
           product_name: string;
+          promotion_name: string | null;
           quantity: number;
           restaurant_id: string;
           selected_options: NonNullable<Json>;
@@ -194,12 +295,14 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           created_at?: string;
+          discount?: number;
           id?: string;
           line_total: number;
           order_created_at: string;
           order_id: string;
           product_id?: string | null;
           product_name: string;
+          promotion_name?: string | null;
           quantity: number;
           restaurant_id: string;
           selected_options?: NonNullable<Json>;
@@ -208,12 +311,14 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          discount?: number;
           id?: string;
           line_total?: number;
           order_created_at?: string;
           order_id?: string;
           product_id?: string | null;
           product_name?: string;
+          promotion_name?: string | null;
           quantity?: number;
           restaurant_id?: string;
           selected_options?: NonNullable<Json>;
@@ -244,21 +349,74 @@ export type Database = {
           },
         ];
       };
+      order_reviews: {
+        Row: {
+          comment: string | null;
+          created_at: string;
+          id: string;
+          order_id: string;
+          rating: number;
+          restaurant_id: string;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          comment?: string | null;
+          created_at?: string;
+          id?: string;
+          order_id: string;
+          rating: number;
+          restaurant_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          comment?: string | null;
+          created_at?: string;
+          id?: string;
+          order_id?: string;
+          rating?: number;
+          restaurant_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "order_reviews_order_id_fkey";
+            columns: ["order_id"];
+            isOneToOne: true;
+            referencedRelation: "orders";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "order_reviews_restaurant_id_fkey";
+            columns: ["restaurant_id"];
+            isOneToOne: false;
+            referencedRelation: "restaurants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       orders: {
         Row: {
           address: string | null;
+          coupon_code: string | null;
           created_at: string;
           customer_name: string;
           customer_phone: string;
           delivery_fee: number;
+          discount: number;
           estimated_ready_at: string | null;
           id: string;
           notes: string | null;
           order_number: number;
           payment_method: Database["public"]["Enums"]["payment_method"];
+          payment_receipt_path: string | null;
+          payment_reported_at: string | null;
+          payment_status: string;
           restaurant_id: string;
+          scheduled_for: string | null;
           status: Database["public"]["Enums"]["order_status"];
           subtotal: number;
+          tip: number;
           total: number;
           tracking_token: string;
           type: Database["public"]["Enums"]["order_type"];
@@ -267,18 +425,25 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           address?: string | null;
+          coupon_code?: string | null;
           created_at?: string;
           customer_name: string;
           customer_phone: string;
           delivery_fee?: number;
+          discount?: number;
           estimated_ready_at?: string | null;
           id?: string;
           notes?: string | null;
           order_number: number;
           payment_method: Database["public"]["Enums"]["payment_method"];
+          payment_receipt_path?: string | null;
+          payment_reported_at?: string | null;
+          payment_status?: string;
           restaurant_id: string;
+          scheduled_for?: string | null;
           status?: Database["public"]["Enums"]["order_status"];
           subtotal: number;
+          tip?: number;
           total: number;
           tracking_token?: string;
           type: Database["public"]["Enums"]["order_type"];
@@ -286,18 +451,25 @@ export type Database = {
         };
         Update: {
           address?: string | null;
+          coupon_code?: string | null;
           created_at?: string;
           customer_name?: string;
           customer_phone?: string;
           delivery_fee?: number;
+          discount?: number;
           estimated_ready_at?: string | null;
           id?: string;
           notes?: string | null;
           order_number?: number;
           payment_method?: Database["public"]["Enums"]["payment_method"];
+          payment_receipt_path?: string | null;
+          payment_reported_at?: string | null;
+          payment_status?: string;
           restaurant_id?: string;
+          scheduled_for?: string | null;
           status?: Database["public"]["Enums"]["order_status"];
           subtotal?: number;
+          tip?: number;
           total?: number;
           tracking_token?: string;
           type?: Database["public"]["Enums"]["order_type"];
@@ -321,6 +493,8 @@ export type Database = {
           id: string;
           image_url: string | null;
           is_available: boolean;
+          is_featured: boolean;
+          is_upsell: boolean;
           name: string;
           position: number;
           price: number;
@@ -335,6 +509,8 @@ export type Database = {
           id?: string;
           image_url?: string | null;
           is_available?: boolean;
+          is_featured?: boolean;
+          is_upsell?: boolean;
           name: string;
           position?: number;
           price: number;
@@ -348,6 +524,8 @@ export type Database = {
           id?: string;
           image_url?: string | null;
           is_available?: boolean;
+          is_featured?: boolean;
+          is_upsell?: boolean;
           name?: string;
           position?: number;
           price?: number;
@@ -364,6 +542,128 @@ export type Database = {
           },
           {
             foreignKeyName: "products_restaurant_id_fkey";
+            columns: ["restaurant_id"];
+            isOneToOne: false;
+            referencedRelation: "restaurants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      promotions: {
+        Row: {
+          category_id: string | null;
+          created_at: string;
+          days: number[];
+          end_time: string;
+          id: string;
+          is_active: boolean;
+          kind: string;
+          name: string;
+          percent: number | null;
+          product_id: string | null;
+          restaurant_id: string;
+          start_time: string;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          category_id?: string | null;
+          created_at?: string;
+          days: number[];
+          end_time: string;
+          id?: string;
+          is_active?: boolean;
+          kind: string;
+          name: string;
+          percent?: number | null;
+          product_id?: string | null;
+          restaurant_id: string;
+          start_time: string;
+          updated_at?: string;
+        };
+        Update: {
+          category_id?: string | null;
+          created_at?: string;
+          days?: number[];
+          end_time?: string;
+          id?: string;
+          is_active?: boolean;
+          kind?: string;
+          name?: string;
+          percent?: number | null;
+          product_id?: string | null;
+          restaurant_id?: string;
+          start_time?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "promotions_category_fkey";
+            columns: ["restaurant_id", "category_id"];
+            isOneToOne: false;
+            referencedRelation: "categories";
+            referencedColumns: ["restaurant_id", "id"];
+          },
+          {
+            foreignKeyName: "promotions_product_fkey";
+            columns: ["restaurant_id", "product_id"];
+            isOneToOne: false;
+            referencedRelation: "products";
+            referencedColumns: ["restaurant_id", "id"];
+          },
+          {
+            foreignKeyName: "promotions_restaurant_id_fkey";
+            columns: ["restaurant_id"];
+            isOneToOne: false;
+            referencedRelation: "restaurants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      restaurant_invitations: {
+        Row: {
+          accepted_at: string | null;
+          accepted_by: string | null;
+          created_at: string;
+          created_by: string | null;
+          email: string;
+          expires_at: string;
+          id: string;
+          restaurant_id: string;
+          role: Database["public"]["Enums"]["member_role"];
+          token_hash: string;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          accepted_at?: string | null;
+          accepted_by?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          email: string;
+          expires_at?: string;
+          id?: string;
+          restaurant_id: string;
+          role?: Database["public"]["Enums"]["member_role"];
+          token_hash: string;
+          updated_at?: string;
+        };
+        Update: {
+          accepted_at?: string | null;
+          accepted_by?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          email?: string;
+          expires_at?: string;
+          id?: string;
+          restaurant_id?: string;
+          role?: Database["public"]["Enums"]["member_role"];
+          token_hash?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "restaurant_invitations_restaurant_id_fkey";
             columns: ["restaurant_id"];
             isOneToOne: false;
             referencedRelation: "restaurants";
@@ -414,10 +714,15 @@ export type Database = {
           delivery_enabled: boolean;
           delivery_fee: number;
           description: string | null;
+          google_review_url: string | null;
           id: string;
           is_active: boolean;
           is_open: boolean;
           logo_url: string | null;
+          loyalty_enabled: boolean;
+          loyalty_reward_kind: string;
+          loyalty_reward_value: number;
+          loyalty_stamps: number;
           min_order: number;
           name: string;
           opening_hours: Json | null;
@@ -425,8 +730,16 @@ export type Database = {
           pickup_enabled: boolean;
           prep_time_minutes: number;
           primary_color: string;
+          scheduling_days: number;
           slug: string;
           timezone: string;
+          tips_enabled: boolean;
+          transfer_account_number: string | null;
+          transfer_account_type: string | null;
+          transfer_bank: string | null;
+          transfer_email: string | null;
+          transfer_holder: string | null;
+          transfer_rut: string | null;
           updated_at: string;
         };
         ComputedFields: never;
@@ -436,10 +749,15 @@ export type Database = {
           delivery_enabled?: boolean;
           delivery_fee?: number;
           description?: string | null;
+          google_review_url?: string | null;
           id?: string;
           is_active?: boolean;
           is_open?: boolean;
           logo_url?: string | null;
+          loyalty_enabled?: boolean;
+          loyalty_reward_kind?: string;
+          loyalty_reward_value?: number;
+          loyalty_stamps?: number;
           min_order?: number;
           name: string;
           opening_hours?: Json | null;
@@ -447,8 +765,16 @@ export type Database = {
           pickup_enabled?: boolean;
           prep_time_minutes?: number;
           primary_color?: string;
+          scheduling_days?: number;
           slug: string;
           timezone?: string;
+          tips_enabled?: boolean;
+          transfer_account_number?: string | null;
+          transfer_account_type?: string | null;
+          transfer_bank?: string | null;
+          transfer_email?: string | null;
+          transfer_holder?: string | null;
+          transfer_rut?: string | null;
           updated_at?: string;
         };
         Update: {
@@ -457,10 +783,15 @@ export type Database = {
           delivery_enabled?: boolean;
           delivery_fee?: number;
           description?: string | null;
+          google_review_url?: string | null;
           id?: string;
           is_active?: boolean;
           is_open?: boolean;
           logo_url?: string | null;
+          loyalty_enabled?: boolean;
+          loyalty_reward_kind?: string;
+          loyalty_reward_value?: number;
+          loyalty_stamps?: number;
           min_order?: number;
           name?: string;
           opening_hours?: Json | null;
@@ -468,8 +799,16 @@ export type Database = {
           pickup_enabled?: boolean;
           prep_time_minutes?: number;
           primary_color?: string;
+          scheduling_days?: number;
           slug?: string;
           timezone?: string;
+          tips_enabled?: boolean;
+          transfer_account_number?: string | null;
+          transfer_account_type?: string | null;
+          transfer_bank?: string | null;
+          transfer_email?: string | null;
+          transfer_holder?: string | null;
+          transfer_rut?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -479,23 +818,41 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      accept_invitation: { Args: { p_token: string }; Returns: string };
       can_manage_restaurant_file: { Args: { p_object_name: string }; Returns: boolean };
+      check_coupon: {
+        Args: {
+          p_code: string;
+          p_delivery_fee?: number;
+          p_phone?: string;
+          p_slug: string;
+          p_subtotal: number;
+        };
+        Returns: Json;
+      };
       confirm_order: {
         Args: { p_order_id: string; p_ready_minutes: number };
         Returns: {
           address: string | null;
+          coupon_code: string | null;
           created_at: string;
           customer_name: string;
           customer_phone: string;
           delivery_fee: number;
+          discount: number;
           estimated_ready_at: string | null;
           id: string;
           notes: string | null;
           order_number: number;
           payment_method: Database["public"]["Enums"]["payment_method"];
+          payment_receipt_path: string | null;
+          payment_reported_at: string | null;
+          payment_status: string;
           restaurant_id: string;
+          scheduled_for: string | null;
           status: Database["public"]["Enums"]["order_status"];
           subtotal: number;
+          tip: number;
           total: number;
           tracking_token: string;
           type: Database["public"]["Enums"]["order_type"];
@@ -508,15 +865,38 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      coupon_discount: {
+        Args: {
+          p_at: string;
+          p_coupon: Omit<
+            Database["public"]["Tables"]["coupons"]["Row"],
+            Database["public"]["Tables"]["coupons"]["ComputedFields"]
+          >;
+          p_delivery_fee: number;
+          p_phone: string;
+          p_subtotal: number;
+        };
+        Returns: number;
+      };
+      create_invitation: {
+        Args: { p_email: string; p_restaurant_id: string };
+        Returns: {
+          expires_at: string;
+          token: string;
+        }[];
+      };
       create_order: {
         Args: {
           p_address: string;
+          p_coupon_code?: string;
           p_customer_name: string;
           p_customer_phone: string;
           p_items: Json;
           p_notes: string;
           p_payment_method: Database["public"]["Enums"]["payment_method"];
           p_restaurant_slug: string;
+          p_scheduled_for?: string;
+          p_tip?: number;
           p_type: Database["public"]["Enums"]["order_type"];
         };
         Returns: {
@@ -540,10 +920,15 @@ export type Database = {
           delivery_enabled: boolean;
           delivery_fee: number;
           description: string | null;
+          google_review_url: string | null;
           id: string;
           is_active: boolean;
           is_open: boolean;
           logo_url: string | null;
+          loyalty_enabled: boolean;
+          loyalty_reward_kind: string;
+          loyalty_reward_value: number;
+          loyalty_stamps: number;
           min_order: number;
           name: string;
           opening_hours: Json | null;
@@ -551,8 +936,16 @@ export type Database = {
           pickup_enabled: boolean;
           prep_time_minutes: number;
           primary_color: string;
+          scheduling_days: number;
           slug: string;
           timezone: string;
+          tips_enabled: boolean;
+          transfer_account_number: string | null;
+          transfer_account_type: string | null;
+          transfer_bank: string | null;
+          transfer_email: string | null;
+          transfer_holder: string | null;
+          transfer_rut: string | null;
           updated_at: string;
         };
         SetofOptions: {
@@ -562,12 +955,40 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      create_winback_coupon: {
+        Args: { p_percent: number; p_phone: string; p_restaurant_id: string };
+        Returns: string;
+      };
       format_clp: { Args: { p_amount: number }; Returns: string };
+      get_customers: {
+        Args: { p_restaurant_id: string };
+        Returns: {
+          first_order: string;
+          last_order: string;
+          name: string;
+          orders: number;
+          phone: string;
+          stamps: number;
+          total_spent: number;
+        }[];
+      };
+      get_invitation: { Args: { p_token: string }; Returns: Json };
       get_order_by_token: { Args: { p_token: string }; Returns: Json };
       get_public_menu: { Args: { p_slug: string }; Returns: Json };
       get_sales_report: {
         Args: { p_from: string; p_restaurant_id: string; p_to: string };
         Returns: Json;
+      };
+      get_team: {
+        Args: { p_restaurant_id: string };
+        Returns: {
+          email: string;
+          is_me: boolean;
+          joined_at: string;
+          member_id: string;
+          role: Database["public"]["Enums"]["member_role"];
+          user_id: string;
+        }[];
       };
       is_open_at: {
         Args: { p_at?: string; p_hours: Json; p_is_open: boolean; p_tz: string };
@@ -589,23 +1010,37 @@ export type Database = {
         Args: { p_status: Database["public"]["Enums"]["order_status"] };
         Returns: string;
       };
+      promotion_active_at: {
+        Args: { p_at: string; p_days: number[]; p_end: string; p_start: string; p_tz: string };
+        Returns: boolean;
+      };
+      random_coupon_code: { Args: { p_prefix: string }; Returns: string };
       reorder_menu_items: { Args: { p_ids: string[]; p_kind: string }; Returns: undefined };
+      report_payment: { Args: { p_receipt_path?: string; p_token: string }; Returns: undefined };
+      report_payment_public: { Args: { p_token: string }; Returns: undefined };
       set_order_estimate: {
         Args: { p_order_id: string; p_ready_minutes: number };
         Returns: {
           address: string | null;
+          coupon_code: string | null;
           created_at: string;
           customer_name: string;
           customer_phone: string;
           delivery_fee: number;
+          discount: number;
           estimated_ready_at: string | null;
           id: string;
           notes: string | null;
           order_number: number;
           payment_method: Database["public"]["Enums"]["payment_method"];
+          payment_receipt_path: string | null;
+          payment_reported_at: string | null;
+          payment_status: string;
           restaurant_id: string;
+          scheduled_for: string | null;
           status: Database["public"]["Enums"]["order_status"];
           subtotal: number;
+          tip: number;
           total: number;
           tracking_token: string;
           type: Database["public"]["Enums"]["order_type"];
@@ -618,22 +1053,68 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      submit_review: {
+        Args: { p_comment?: string; p_rating: number; p_token: string };
+        Returns: undefined;
+      };
       update_order_status: {
         Args: { p_order_id: string; p_status: Database["public"]["Enums"]["order_status"] };
         Returns: {
           address: string | null;
+          coupon_code: string | null;
           created_at: string;
           customer_name: string;
           customer_phone: string;
           delivery_fee: number;
+          discount: number;
           estimated_ready_at: string | null;
           id: string;
           notes: string | null;
           order_number: number;
           payment_method: Database["public"]["Enums"]["payment_method"];
+          payment_receipt_path: string | null;
+          payment_reported_at: string | null;
+          payment_status: string;
           restaurant_id: string;
+          scheduled_for: string | null;
           status: Database["public"]["Enums"]["order_status"];
           subtotal: number;
+          tip: number;
+          total: number;
+          tracking_token: string;
+          type: Database["public"]["Enums"]["order_type"];
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "orders";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      verify_payment: {
+        Args: { p_order_id: string };
+        Returns: {
+          address: string | null;
+          coupon_code: string | null;
+          created_at: string;
+          customer_name: string;
+          customer_phone: string;
+          delivery_fee: number;
+          discount: number;
+          estimated_ready_at: string | null;
+          id: string;
+          notes: string | null;
+          order_number: number;
+          payment_method: Database["public"]["Enums"]["payment_method"];
+          payment_receipt_path: string | null;
+          payment_reported_at: string | null;
+          payment_status: string;
+          restaurant_id: string;
+          scheduled_for: string | null;
+          status: Database["public"]["Enums"]["order_status"];
+          subtotal: number;
+          tip: number;
           total: number;
           tracking_token: string;
           type: Database["public"]["Enums"]["order_type"];

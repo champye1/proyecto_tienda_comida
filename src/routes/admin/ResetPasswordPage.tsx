@@ -27,10 +27,14 @@ import { AuthCard } from './AuthCard'
 /** Etapas de la pantalla: verificando el enlace, enlace inválido o formulario listo. */
 type Status = 'verifying' | 'invalid' | 'ready'
 
+/** Página del enlace de recuperación: verifica el token y pide la contraseña nueva. */
 export default function ResetPasswordPage() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
-  const [status, setStatus] = useState<Status>('verifying')
+  // Sin token de recuperación en la URL, el enlace es inválido desde el principio.
+  const [status, setStatus] = useState<Status>(() =>
+    params.get('token_hash') && params.get('type') === 'recovery' ? 'verifying' : 'invalid',
+  )
   const [values, setValues] = useState<NewPasswordValues>({ password: '', confirmPassword: '' })
   const [errors, setErrors] = useState<FieldErrors<NewPasswordValues>>({})
   const [formError, setFormError] = useState<string | null>(null)
@@ -45,10 +49,7 @@ export default function ResetPasswordPage() {
     verifyStarted.current = true
 
     const tokenHash = params.get('token_hash')
-    if (!tokenHash || params.get('type') !== 'recovery') {
-      setStatus('invalid')
-      return
-    }
+    if (!tokenHash || params.get('type') !== 'recovery') return // ya quedó 'invalid' al iniciar
 
     supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }).then(({ error }) => {
       // Se quita el token de la URL: ya se usó y no debe quedar en el historial.

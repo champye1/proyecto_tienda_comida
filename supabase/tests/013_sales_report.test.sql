@@ -46,9 +46,9 @@ select throws_ok(
   'B no puede ver el reporte de A'
 );
 select throws_like(
-  format($$ select public.get_sales_report('bbbbbbbb-0000-4000-8000-000000000001', %L, %L) $$, (:'today'::date - 40), :'today'),
-  '%máximo del reporte es de 31 días%',
-  'Rango de más de 31 días: rechazado'
+  format($$ select public.get_sales_report('bbbbbbbb-0000-4000-8000-000000000001', %L, %L) $$, (:'today'::date - 400), :'today'),
+  '%máximo del reporte es de un año%',
+  'Rango de más de un año: rechazado'
 );
 select throws_like(
   format($$ select public.get_sales_report('bbbbbbbb-0000-4000-8000-000000000001', %L, %L) $$, :'today', (:'today'::date - 1)),

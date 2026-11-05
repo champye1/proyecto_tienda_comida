@@ -1,0 +1,41 @@
+// Linter del proyecto (oxlint): revisa errores comunes antes de que lleguen a producción.
+// Se usa oxlint (mismas reglas que ESLint) porque el parser de ESLint para TypeScript todavía
+// no soporta TypeScript 7, que usa este proyecto. Se corre con `npm run lint` y en el CI.
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react", "unicorn", "oxc", "import"],
+  "categories": {
+    // Errores casi seguros: bloquean el CI.
+    "correctness": "error",
+    // Código sospechoso: se revisa caso a caso.
+    "suspicious": "warn"
+  },
+  "rules": {
+    // Hooks de React: llamarlos siempre en el mismo orden y declarar todas sus dependencias.
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "error",
+    // Variables o imports sin usar (los que empiezan con "_" se ignoran a propósito).
+    "no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_", "caughtErrors": "none" }],
+    "react/jsx-key": "error",
+    // Seguridad: nunca HTML crudo ni eval (ver SECURITY.md).
+    "react/no-danger": "error",
+    "no-eval": "error",
+    "import/no-cycle": "error",
+    "eqeqeq": ["error", "smart"],
+    // Con el JSX moderno (React 17+) no hace falta importar React en cada archivo.
+    "react/react-in-jsx-scope": "off",
+    // No se usa Array#toSorted(): no existe en iPhones con iOS 15 o anterior (la tienda dejaría de
+    // funcionar en esos celulares). Donde se usa sort() es siempre sobre una copia ([...x].sort()).
+    "unicorn/no-array-sort": "off",
+    // Los imports de CSS ("./index.css") son intencionalmente sin asignar.
+    "import/no-unassigned-import": ["warn", { "allow": ["**/*.css"] }]
+  },
+  "env": { "browser": true, "es2024": true },
+  "overrides": [
+    // Edge Functions: corren en Deno.
+    { "files": ["supabase/functions/**"], "globals": { "Deno": "readonly" } },
+    // Pruebas, scripts y configuración: corren en Node.
+    { "files": ["tests/**", "scripts/**", "*.config.ts"], "env": { "node": true } }
+  ],
+  "ignorePatterns": ["dist/**", "dist-e2e/**", "dev-dist/**", "node_modules/**", "src/types/database.types.ts", "backups/**"]
+}

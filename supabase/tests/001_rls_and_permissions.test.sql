@@ -48,7 +48,8 @@ select is_empty(
      join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public'
        and has_function_privilege('anon', p.oid, 'EXECUTE')
-       and p.proname not in ('get_order_by_token', 'is_restaurant_public', 'get_public_menu', 'is_open_at') $$,
+       and p.proname not in ('get_order_by_token', 'is_restaurant_public', 'get_public_menu', 'is_open_at',
+                           'check_coupon', 'promotion_active_at', 'submit_review', 'report_payment_public') $$,
   'anon solo puede ejecutar las funciones públicas (seguimiento, menú y horario)'
 );
 
@@ -62,7 +63,10 @@ select is_empty(
          'get_order_by_token', 'create_restaurant', 'update_order_status',
          'is_restaurant_public', 'is_restaurant_member', 'is_restaurant_owner', 'can_manage_restaurant_file',
          'is_slug_available', 'is_reserved_slug', 'reorder_menu_items', 'get_public_menu', 'get_sales_report',
-         'is_open_at', 'confirm_order', 'set_order_estimate'
+         'is_open_at', 'confirm_order', 'set_order_estimate',
+         'create_invitation', 'get_invitation', 'accept_invitation', 'get_team', 'get_customers',
+         'check_coupon', 'promotion_active_at', 'submit_review', 'create_winback_coupon',
+         'report_payment_public', 'verify_payment'
        ) $$,
   'authenticated solo puede ejecutar las funciones permitidas'
 );

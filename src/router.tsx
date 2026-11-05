@@ -12,13 +12,18 @@
  *   /admin/recuperar          Pedir correo de recuperación  ┐ con o sin sesión
  *   /admin/nueva-contrasena   Crear contraseña desde correo ┘
  *   /admin/onboarding         Registrar un restaurante      ┐ requieren sesión
+ *   /admin/invitacion/:token  Aceptar invitación al equipo  │
  *   /admin                    Inicio del panel              │ (RequireAuth)
  *   /admin/cuenta             Mi cuenta / cambiar contraseña│
  *   /admin/pedidos            Pedidos en vivo + historial   │
  *   /admin/reportes           Ventas y productos más vendidos│
  *   /admin/local              Mi local: datos y configuración│
  *   /admin/menu               Menú: categorías y productos  │
- *   /admin/menu/productos/…   Crear / editar un producto    ┘
+ *   /admin/menu/productos/…   Crear / editar un producto    │
+ *   /admin/promociones        Cupones y promociones         │
+ *   /admin/clientes           Clientes frecuentes           │
+ *   /admin/resenas            Reseñas de los clientes       │
+ *   /admin/equipo             Equipo e invitaciones         ┘
  *
  * Todas las páginas se cargan con `lazy`: cada una es un archivo JS aparte que se
  * descarga solo al visitarla. Así el cliente que pide desde el celular no descarga
@@ -29,6 +34,7 @@ import { PageLoader } from '@/components/PageLoader'
 import RootLayout from '@/routes/RootLayout'
 import RouteError from '@/routes/RouteError'
 
+/** Rutas de la aplicación (ver el mapa en el comentario de arriba). */
 export const router = createBrowserRouter([
   {
     // Ruta raíz sin URL propia. No es lazy: aporta el HydrateFallback (loader) que se
@@ -117,6 +123,11 @@ export const router = createBrowserRouter([
                 path: 'onboarding',
                 lazy: async () => ({ Component: (await import('./routes/admin/OnboardingPage')).default }),
               },
+              // Invitación al equipo: también fuera de AdminShell (el invitado aún no tiene restaurante).
+              {
+                path: 'invitacion/:token',
+                lazy: async () => ({ Component: (await import('./routes/admin/InvitationPage')).default }),
+              },
               // AdminShell: cabecera del panel + restaurante activo (sin restaurante → onboarding).
               {
                 lazy: async () => ({ Component: (await import('./routes/admin/AdminShell')).default }),
@@ -133,6 +144,22 @@ export const router = createBrowserRouter([
                   {
                     path: 'reportes',
                     lazy: async () => ({ Component: (await import('./routes/admin/reports/ReportsPage')).default }),
+                  },
+                  {
+                    path: 'promociones',
+                    lazy: async () => ({ Component: (await import('./routes/admin/PromotionsPage')).default }),
+                  },
+                  {
+                    path: 'resenas',
+                    lazy: async () => ({ Component: (await import('./routes/admin/ReviewsPage')).default }),
+                  },
+                  {
+                    path: 'clientes',
+                    lazy: async () => ({ Component: (await import('./routes/admin/CustomersPage')).default }),
+                  },
+                  {
+                    path: 'equipo',
+                    lazy: async () => ({ Component: (await import('./routes/admin/TeamPage')).default }),
                   },
                   {
                     path: 'local',

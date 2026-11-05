@@ -6,10 +6,14 @@
  *   valida todo y devuelve el número de pedido y el token de seguimiento.
  * - Si el servidor rechaza el pedido (local cerrado, producto agotado, límite de pedidos…)
  *   se muestra su mensaje y se recarga el menú, por si cambió algo.
+ * - Secciones en checkout/: cupón (CouponField), "¿Cuándo lo quieres?" (SchedulePicker),
+ *   propina (TipPicker) y resumen con totales (OrderSummary). Esta página guarda el estado
+ *   del formulario y arma el pedido.
+ * - Transferencia: si el local cargó sus datos bancarios, se muestran aquí mismo.
  * - "Recordar mis datos" es opcional y viene desmarcado (privacidad: el dispositivo puede
  *   ser compartido). Si se desmarca, se borran los datos guardados.
  */
-import { useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Captcha, type CaptchaHandle } from '@/components/Captcha'
@@ -17,12 +21,21 @@ import { Alert } from '@/components/ui/Alert'
 import { InputField, TextareaField } from '@/components/ui/Field'
 import { useDocumentMeta } from '@/features/store/appearance'
 import { checkoutSchema, createOrder, readSavedCustomer, saveCustomer, type CheckoutValues } from '@/features/store/orders'
+import { couponDiscount, tipAmount, type AppliedCoupon } from '@/features/store/pricing'
 import { useStoreOpen } from '@/features/store/useStoreOpen'
 import { dbErrorMessage } from '@/lib/errors'
 import { formatCLP } from '@/lib/format'
 import { fieldErrors, type FieldErrors } from '@/lib/forms'
+import { scheduleSlots } from '@/lib/openingHours'
+import { CouponField } from './checkout/CouponField'
+import { OrderSummary } from './checkout/OrderSummary'
+import { Card, Choice } from './checkout/parts'
+import { SchedulePicker } from './checkout/SchedulePicker'
+import { TipPicker } from './checkout/TipPicker'
 import { useStore } from './StoreRoot'
+import { TransferDetails } from './TransferDetails'
 
+/** Página de checkout: arma y envía el pedido. */
 export default function CheckoutPage() {
   const { slug, menu, cart, lines, subtotal } = useStore()
   const { restaurant } = menu
@@ -31,6 +44,7 @@ export default function CheckoutPage() {
   const queryClient = useQueryClient()
   useDocumentMeta({ title: `Finalizar pedido · ${restaurant.name}` })
 
+  // Datos del cliente (recordados en este dispositivo si lo pidió).
   const saved = readSavedCustomer()
   const [values, setValues] = useState<CheckoutValues>({
     name: saved?.name ?? '',
@@ -43,14 +57,35 @@ export default function CheckoutPage() {
   })
   const [remember, setRemember] = useState(saved !== null)
   const [errors, setErrors] = useState<FieldErrors<CheckoutValues>>({})
+
+  // Pedidos programados: horarios disponibles (solo si el local los acepta y su interruptor está encendido).
+  const slots = restaurant.is_open_manual
+    ? scheduleSlots(restaurant.opening_hours, restaurant.timezone, restaurant.prep_time_minutes, restaurant.scheduling_days)
+    : []
+  const [when, setWhen] = useState<'asap' | 'later'>(open ? 'asap' : 'later')
+  const [slot, setSlot] = useState('')
+  const mustSchedule = !open && slots.length > 0
+  const scheduled = (mustSchedule || when === 'later') && slot ? slot : null
+
+  // Cupón aplicado (validado por el servidor) y propina.
+  const [coupon, setCoupon] = useState<AppliedCoupon | null>(null)
+  const [tipPercent, setTipPercent] = useState(0)
+
   // CAPTCHA: el servidor (place-order) rechaza pedidos sin token válido, lo que frena
   // a los bots que inundan al restaurante con pedidos falsos.
   const captcha = useRef<CaptchaHandle>(null)
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
 
+  // Totales estimados (mismas fórmulas que el servidor: ver pricing.ts).
+  const deliveryFee = values.type === 'delivery' ? restaurant.delivery_fee : 0
+  const discount = couponDiscount(coupon, subtotal, deliveryFee)
+  const tip = restaurant.tips_enabled ? tipAmount(subtotal, tipPercent) : 0
+  const total = subtotal + deliveryFee - discount + tip
+  const belowMinimum = subtotal < restaurant.min_order
+
   const order = useMutation({
     mutationFn: ({ data, token }: { data: Parameters<typeof createOrder>[1]; token: string }) =>
-      createOrder(slug, data, cart.lines, token),
+      createOrder(slug, data, cart.lines, token, { couponCode: coupon?.code ?? null, scheduledFor: scheduled, tip }),
     onSuccess: (result, { data }) => {
       saveCustomer(remember ? { name: data.name, phone: data.phone, address: data.address } : null)
       cart.clear()
@@ -64,10 +99,7 @@ export default function CheckoutPage() {
     },
   })
 
-  const deliveryFee = values.type === 'delivery' ? restaurant.delivery_fee : 0
-  const total = subtotal + deliveryFee
-  const belowMinimum = subtotal < restaurant.min_order
-
+  /** Valida el formulario y envía el pedido. */
   function onSubmit(e: FormEvent) {
     e.preventDefault()
     const parsed = checkoutSchema.safeParse(values)
@@ -76,6 +108,12 @@ export default function CheckoutPage() {
       return
     }
     if (!captchaToken) return
+    // Si hay que programar (o se eligió programar), se exige elegir la hora.
+    if ((mustSchedule || when === 'later') && !slot) {
+      setErrors({})
+      document.getElementById('slot')?.focus()
+      return
+    }
     setErrors({})
     order.mutate({ data: parsed.data, token: captchaToken })
   }
@@ -91,6 +129,7 @@ export default function CheckoutPage() {
     )
   }
 
+  /** Crea el onChange de un campo de texto del formulario. */
   const set = (field: 'name' | 'phone' | 'address' | 'notes') => (e: { target: { value: string } }) =>
     setValues((v) => ({ ...v, [field]: e.target.value }))
 
@@ -109,7 +148,12 @@ export default function CheckoutPage() {
       </header>
 
       <form onSubmit={onSubmit} noValidate className="mx-auto max-w-2xl space-y-5 px-4 py-6">
-        {!open && <Alert tone="error">El local está cerrado y no está recibiendo pedidos en este momento.</Alert>}
+        {!open &&
+          (mustSchedule ? (
+            <Alert tone="info">El local está cerrado ahora, pero puedes programar tu pedido para más tarde.</Alert>
+          ) : (
+            <Alert tone="error">El local está cerrado y no está recibiendo pedidos en este momento.</Alert>
+          ))}
         {order.isError && <Alert tone="error">{dbErrorMessage(order.error)}</Alert>}
 
         <Card title="Tus datos">
@@ -174,9 +218,10 @@ export default function CheckoutPage() {
               checked={values.payment_method === 'transfer'}
               onChange={() => setValues((v) => ({ ...v, payment_method: 'transfer' }))}
               title="Transferencia"
-              detail="El restaurante te indicará sus datos"
+              detail={restaurant.transfer ? 'Te mostramos los datos aquí' : 'El restaurante te indicará sus datos'}
             />
           </div>
+          {values.payment_method === 'transfer' && restaurant.transfer && <TransferDetails info={restaurant.transfer} />}
           <TextareaField
             label="Notas para el restaurante (opcional)"
             rows={2}
@@ -187,38 +232,32 @@ export default function CheckoutPage() {
           />
         </Card>
 
-        <Card title="Resumen">
-          <ul className="divide-y divide-zinc-100 text-sm">
-            {lines.map((l) => (
-              <li key={l.key} className="flex justify-between gap-3 py-2">
-                <span className="min-w-0">
-                  <span className="font-medium text-zinc-900">
-                    {l.quantity}× {l.product.name}
-                  </span>
-                  {l.optionsText && <span className="block text-zinc-500">{l.optionsText}</span>}
-                </span>
-                <span className="shrink-0 tabular-nums">{formatCLP(l.lineTotal)}</span>
-              </li>
-            ))}
-          </ul>
-          <dl className="space-y-1 border-t border-zinc-200 pt-3 text-sm">
-            <div className="flex justify-between">
-              <dt>Subtotal</dt>
-              <dd className="tabular-nums">{formatCLP(subtotal)}</dd>
-            </div>
-            {values.type === 'delivery' && (
-              <div className="flex justify-between">
-                <dt>Delivery</dt>
-                <dd className="tabular-nums">{formatCLP(deliveryFee)}</dd>
-              </div>
-            )}
-            <div className="flex justify-between text-base font-bold">
-              <dt>Total</dt>
-              <dd className="tabular-nums">{formatCLP(total)}</dd>
-            </div>
-          </dl>
-          <p className="text-xs text-zinc-500">El total final lo confirma el restaurante al recibir tu pedido.</p>
-        </Card>
+        {slots.length > 0 && (
+          <SchedulePicker
+            slots={slots}
+            mustSchedule={mustSchedule}
+            prepMinutes={restaurant.prep_time_minutes}
+            when={when}
+            onWhen={setWhen}
+            slot={slot}
+            onSlot={setSlot}
+          />
+        )}
+
+        <OrderSummary
+          lines={lines}
+          subtotal={subtotal}
+          deliveryFee={values.type === 'delivery' ? deliveryFee : null}
+          tip={tip}
+          coupon={coupon}
+          discount={discount}
+          total={total}
+          onRemoveCoupon={() => setCoupon(null)}
+        >
+          <CouponField slug={slug} subtotal={subtotal} deliveryFee={deliveryFee} phone={values.phone} onApplied={setCoupon} />
+        </OrderSummary>
+
+        {restaurant.tips_enabled && <TipPicker percent={tipPercent} onChange={setTipPercent} />}
 
         <label className="flex min-h-11 items-center gap-3 text-sm text-zinc-700">
           <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="size-5 accent-[var(--brand)]" />
@@ -251,7 +290,7 @@ export default function CheckoutPage() {
 
         <button
           type="submit"
-          disabled={order.isPending || !open || belowMinimum || !captchaToken}
+          disabled={order.isPending || (!open && !mustSchedule) || belowMinimum || !captchaToken}
           className="flex min-h-14 w-full items-center justify-between rounded-xl bg-brand px-6 text-lg font-semibold text-brand-contrast disabled:opacity-50"
         >
           <span>{order.isPending ? 'Enviando pedido…' : captchaToken ? 'Confirmar pedido' : 'Verificando…'}</span>
@@ -259,32 +298,5 @@ export default function CheckoutPage() {
         </button>
       </form>
     </div>
-  )
-}
-
-/** Tarjeta de sección del formulario. */
-function Card({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-5">
-      <h2 className="font-semibold text-zinc-900">{title}</h2>
-      {children}
-    </section>
-  )
-}
-
-/** Opción tipo tarjeta (radio grande, fácil de tocar). */
-function Choice({ name, checked, onChange, title, detail }: { name: string; checked: boolean; onChange: () => void; title: string; detail: string }) {
-  return (
-    <label
-      className={`flex min-h-16 cursor-pointer items-start gap-3 rounded-xl border-2 p-4 ${
-        checked ? 'border-brand bg-zinc-50' : 'border-zinc-200 hover:border-zinc-300'
-      }`}
-    >
-      <input type="radio" name={name} checked={checked} onChange={onChange} className="mt-0.5 size-5 accent-[var(--brand)]" />
-      <span>
-        <span className="block font-semibold text-zinc-900">{title}</span>
-        <span className="block text-sm text-zinc-500">{detail}</span>
-      </span>
-    </label>
   )
 }

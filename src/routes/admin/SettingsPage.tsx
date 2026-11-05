@@ -4,6 +4,8 @@
  * - Datos que ve el cliente: nombre, descripción, teléfono, dirección, logo y color.
  * - Cómo vende: retiro en local y/o delivery, costo de envío y pedido mínimo.
  * - Horario de atención, zona horaria y tiempo de preparación (OpeningHoursCard, se guarda aparte).
+ * - Pagos: datos de transferencia y propina (PaymentsCard, se guarda aparte).
+ * - Fidelización (tarjeta de sellos) y link de reseñas de Google (LoyaltyCard, se guarda aparte).
  * - Solo el dueño puede guardar (la RLS de restaurants también lo exige); el personal
  *   ve los datos en modo lectura.
  * - El logo se procesa igual que las fotos (WebP, sin metadatos, nombre aleatorio) y el
@@ -26,11 +28,14 @@ import { contrastColor } from '@/features/store/appearance'
 import { dbErrorMessage } from '@/lib/errors'
 import { fieldErrors, type FieldErrors } from '@/lib/forms'
 import { supabase } from '@/lib/supabase'
+import { LoyaltyCard } from './LoyaltyCard'
 import { OpeningHoursCard } from './OpeningHoursCard'
+import { PaymentsCard } from './PaymentsCard'
 
 /** Tamaño máximo del logo (px): se muestra pequeño, no necesita más. */
 const LOGO_SIZE = 512
 
+/** Página "Mi local": datos, apariencia, cómo vende, horario, pagos y fidelización. */
 export default function SettingsPage() {
   const { restaurant } = useCurrentRestaurant()
   const session = useSession()
@@ -255,6 +260,8 @@ export default function SettingsPage() {
       </form>
 
       <OpeningHoursCard restaurant={restaurant} />
+      <PaymentsCard restaurant={restaurant} />
+      <LoyaltyCard restaurant={restaurant} />
     </div>
   )
 }

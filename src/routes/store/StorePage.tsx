@@ -6,14 +6,16 @@
  *                horario), tiempo de preparación, delivery/retiro, pedido mínimo y horario.
  *   Categorías   barra fija con desplazamiento horizontal; se marca la categoría que se
  *                está viendo y al tocar una se salta a ella.
- *   Productos    agrupados por categoría; al tocar uno se abre su hoja con opciones.
+ *   Destacados   fila horizontal con los productos que el local marcó como destacados.
+ *   Productos    agrupados por categoría (con su promoción vigente, si tiene); al tocar
+ *                uno se abre su hoja con opciones.
  *   Carrito      barra fija abajo con cantidad y total; abre la hoja del carrito.
  */
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { LegalLinks } from '@/components/LegalLinks'
 import { useDocumentMeta } from '@/features/store/appearance'
-import type { PublicProduct } from '@/features/store/menu'
+import { promoBadge, type PublicProduct } from '@/features/store/menu'
 import { formatCLP } from '@/lib/format'
 import { useStoreOpen } from '@/features/store/useStoreOpen'
 import { DAY_NAMES, formatDaySlots, type WeekHours } from '@/lib/openingHours'
@@ -21,6 +23,7 @@ import { CartSheet } from './CartSheet'
 import { ProductSheet } from './ProductSheet'
 import { useStore } from './StoreRoot'
 
+/** Página principal de la tienda: cabecera, destacados, menú y barra del carrito. */
 export default function StorePage() {
   const { menu, cart, subtotal, count } = useStore()
   const { restaurant, categories } = menu
@@ -50,6 +53,7 @@ export default function StorePage() {
         <>
           <CategoryNav />
           <main className="mx-auto max-w-2xl space-y-8 px-4 pt-6">
+            <Featured products={categories.flatMap((c) => c.products).filter((p) => p.is_featured)} onOpen={setOpenProduct} />
             {categories.map((c) => (
               <section key={c.id} id={`cat-${c.id}`} data-category={c.id} className="scroll-mt-20" aria-labelledby={`cat-title-${c.id}`}>
                 <h2 id={`cat-title-${c.id}`} className="mb-3 text-xl font-bold text-zinc-900">
@@ -154,6 +158,13 @@ function StoreHeader() {
           </p>
         )}
         {r.opening_hours && <WeekSchedule hours={r.opening_hours} />}
+        {r.loyalty && (
+          <p className="mt-3 rounded-xl bg-brand/10 px-4 py-2 text-sm font-medium text-zinc-900">
+            ★ Junta {r.loyalty.required} sellos y gana{' '}
+            {r.loyalty.reward_kind === 'percent' ? `${r.loyalty.reward_value}% de descuento` : `${formatCLP(r.loyalty.reward_value)} de descuento`}. Cada pedido entregado
+            suma un sello.
+          </p>
+        )}
       </div>
     </header>
   )
@@ -196,6 +207,9 @@ function CategoryNav() {
     )
     sections.forEach((s) => observer.observe(s))
     return () => observer.disconnect()
+    // "menu" no se lee aquí, pero es intencional: si cambia el menú, cambian las secciones del DOM
+    // y hay que volver a observarlas.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [menu])
 
   // Lleva el botón activo a la vista dentro de la barra horizontal.
@@ -232,13 +246,60 @@ function CategoryNav() {
   )
 }
 
+/** Etiqueta de promoción vigente ("-20%", "2x1") con el nombre de la promo como texto accesible. */
+function PromoBadge({ promo }: { promo: NonNullable<PublicProduct['promo']> }) {
+  return (
+    <span className="ml-2 inline-block rounded-full bg-brand px-2 py-0.5 align-middle text-xs font-bold text-brand-contrast" title={promo.name}>
+      {promoBadge(promo)}
+      <span className="sr-only"> · {promo.name}</span>
+    </span>
+  )
+}
+
+/** Productos destacados: tarjetas grandes con foto en una fila deslizable. */
+function Featured({ products, onOpen }: { products: PublicProduct[]; onOpen: (p: PublicProduct) => void }) {
+  if (products.length === 0) return null
+  return (
+    <section aria-labelledby="featured-title">
+      <h2 id="featured-title" className="mb-3 text-xl font-bold text-zinc-900">
+        Destacados
+      </h2>
+      <ul className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+        {products.map((p) => (
+          <li key={p.id} className="w-40 shrink-0 snap-start">
+            <button type="button" onClick={() => onOpen(p)} className="block w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white text-left hover:border-zinc-300">
+              {p.image_url ? (
+                <img src={p.image_url} alt="" width={160} height={120} loading="lazy" decoding="async" className="h-28 w-full object-cover" />
+              ) : (
+                <span aria-hidden className="flex h-28 items-center justify-center bg-zinc-100 text-3xl font-bold text-zinc-400">
+                  {p.name.charAt(0)}
+                </span>
+              )}
+              <span className="block p-3">
+                <span className="line-clamp-2 text-sm font-semibold text-zinc-900">{p.name}</span>
+                <span className="mt-1 block text-sm font-semibold text-zinc-700">
+                  {formatCLP(p.price)}
+                  {p.promo && <PromoBadge promo={p.promo} />}
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 /** Fila de producto: nombre, descripción, precio y foto. Toda la fila abre la hoja. */
 function ProductRow({ product, onOpen }: { product: PublicProduct; onOpen: () => void }) {
   const hasOptions = product.option_groups.length > 0
   return (
     <button type="button" onClick={onOpen} className="flex w-full items-start gap-4 p-4 text-left hover:bg-zinc-50">
       <div className="min-w-0 flex-1">
-        <h3 className="font-semibold text-zinc-900">{product.name}</h3>
+        <h3 className="font-semibold text-zinc-900">
+          {product.name}
+          {product.promo && <PromoBadge promo={product.promo} />}
+        </h3>
         {product.description && <p className="mt-1 line-clamp-2 text-sm text-zinc-600">{product.description}</p>}
         <p className="mt-2 font-semibold text-zinc-900">
           {hasOptions && <span className="text-sm font-normal text-zinc-500">Desde </span>}

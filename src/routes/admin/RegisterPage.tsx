@@ -6,24 +6,30 @@
  * - Protegido con CAPTCHA (Turnstile): Supabase Auth rechaza el registro sin token válido,
  *   lo que frena la creación masiva de cuentas falsas.
  *
- * Después de registrarse, el usuario pasa al onboarding para crear su restaurante.
+ * Después de registrarse, el usuario pasa al onboarding para crear su restaurante (o, si
+ * llegó desde una invitación al equipo, vuelve a ella: parámetro ?next=).
  * Si Supabase tiene activada la confirmación de email (lo normal en producción),
  * no hay sesión hasta confirmar y se muestra "Revisa tu correo".
  */
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { Captcha, type CaptchaHandle } from '@/components/Captcha'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
 import { InputField } from '@/components/ui/Field'
 import { authErrorMessage } from '@/features/auth/authErrors'
+import { safeNext } from '@/features/auth/guards'
 import { LEGAL_VERSION, registerSchema, type RegisterValues } from '@/features/auth/schemas'
 import { fieldErrors, type FieldErrors } from '@/lib/forms'
 import { supabase } from '@/lib/supabase'
 import { AuthCard } from './AuthCard'
 
+/** Formulario de registro (con CAPTCHA y aceptación de términos). */
 export default function RegisterPage() {
   const navigate = useNavigate()
+  // Si viene de una invitación (?next=/admin/invitacion/…), vuelve ahí en vez del onboarding.
+  const [params] = useSearchParams()
+  const next = params.get('next') ? safeNext(params.get('next')) : '/admin/onboarding'
   const [values, setValues] = useState<RegisterValues>({ email: '', password: '', confirmPassword: '', acceptTerms: false })
   const [errors, setErrors] = useState<FieldErrors<RegisterValues>>({})
   const [formError, setFormError] = useState<string | null>(null)
@@ -55,7 +61,7 @@ export default function RegisterPage() {
       options: {
         captchaToken,
         // A dónde lleva el enlace del correo de confirmación (si está activada).
-        emailRedirectTo: `${window.location.origin}/admin/onboarding`,
+        emailRedirectTo: `${window.location.origin}${next}`,
         // Constancia de la aceptación de los textos legales (qué versión y cuándo).
         data: { terms_version: LEGAL_VERSION, terms_accepted_at: new Date().toISOString() },
       },
@@ -71,7 +77,7 @@ export default function RegisterPage() {
       setPendingConfirmation(parsed.data.email)
       return
     }
-    navigate('/admin/onboarding', { replace: true })
+    navigate(next, { replace: true })
   }
 
   if (pendingConfirmation) {

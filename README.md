@@ -12,6 +12,14 @@ Plataforma multi-tenant de pedidos online para restaurantes (Chile).
 - **Operación diaria:** horario de atención automático (por zona horaria), tiempo estimado al
   confirmar (el cliente lo ve en su seguimiento), comanda imprimible para cocina (impresoras
   térmicas de 80 mm, con impresión automática opcional) y código QR de la tienda (PNG, SVG y cartel).
+- **Equipo y reportes:** invitar al personal por link (WhatsApp), clientes frecuentes con exportación a
+  Excel, reportes de hasta un año (por día o mes), horas y días peak y productos sin ventas.
+- **Vender más:** cupones, promociones por día y horario (porcentaje o 2x1), destacados, venta sugerida
+  en el carrito y pedidos programados.
+- **Fidelización:** tarjeta de sellos con premio automático, cupones para recuperar clientes inactivos
+  (por WhatsApp) y reseñas (con invitación a Google a quien pone 5 estrellas).
+- **Pagos sin pasarela:** datos de transferencia en el checkout, "Ya transferí" con foto del comprobante
+  (bucket privado), verificación desde el panel y propina opcional.
 - **Landing animada** de la plataforma (`/`).
 - **Seguridad:** aislamiento por restaurante con RLS, precios calculados en el servidor, CSP estricta,
   CAPTCHA en pedidos y accesos, y más. Ver [SECURITY.md](SECURITY.md).
@@ -66,14 +74,24 @@ Con la sesión iniciada también se puede cambiar en `/admin/cuenta` (pide la ac
 
 ## Pruebas
 ```bash
-npm run db:reset     # las pruebas usan los datos del seed
-npm run db:test      # pgTAP: RLS, aislamiento, create_order, seguimiento, estados, Storage, seguridad
+npm run lint         # linter (oxlint): errores comunes de React/TypeScript; los avisos también fallan
+npm test             # unitarias (Vitest, tests/unit): precios, horarios, exportación CSV
+npm run db:reset     # las pruebas de la base usan los datos del seed
+npm run db:test      # pgTAP (supabase/tests): RLS, aislamiento, pedidos, promociones, pagos, seguridad
 npm run verify:api   # por la API: Realtime + RLS, concurrencia, Storage, CAPTCHA de pedidos
+npm run test:e2e     # navegador real (tests/e2e): las 6 suites sobre el build de producción
 ```
-`verify:api` crea pedidos y archivos de prueba: corre `npm run db:reset` después.
+- `verify:api` crea pedidos y archivos de prueba: corre `npm run db:reset` después.
+- ⚠ `test:e2e` **reinicia la base local antes de cada suite** (borra lo que tengas en local). Hace su
+  propio build, sirve la app en los puertos 5180/5181 y los cierra al terminar (no toca tu `npm run dev`).
+  En Windows con Edge instalado: `E2E_BROWSER_CHANNEL=msedge npm run test:e2e`; si `docker` no está
+  en el PATH, indica su ruta con `DOCKER_BIN`.
+- Las fórmulas de precios existen dos veces (SQL, que es el que cobra, y `src/features/store/pricing.ts`,
+  que muestra el total estimado): `tests/unit/pricing.test.ts` usa los mismos casos que las pruebas
+  pgTAP para detectar si se separan.
 
-El **CI** (`.github/workflows/ci.yml`) corre lo mismo en cada push y PR: audit, build, lint SQL,
-pgTAP y `verify:api` contra un Supabase levantado en GitHub Actions.
+El **CI** (`.github/workflows/ci.yml`) corre todo esto en cada push y PR: audit, lint, unitarias, build,
+lint SQL, pgTAP, `verify:api` y las pruebas de navegador contra un Supabase levantado en GitHub Actions.
 
 ## CAPTCHA (Cloudflare Turnstile)
 En local se usan las claves de **prueba** de Cloudflare (siempre aprueban; ya están en
@@ -141,6 +159,11 @@ aceptados y **checklist obligatorio antes de producción**.
 - `/admin/reportes` — ventas del día o de un período y productos más vendidos
 - `/admin/local` — datos del local: logo, color, delivery/retiro, costo de envío y pedido mínimo
 - `/admin/menu` — edición del menú: categorías, productos con foto, grupos de opciones
+- `/admin/promociones` — cupones y promociones por horario
+- `/admin/clientes` — clientes frecuentes, inactivos ("invitar a volver") y exportación a Excel
+- `/admin/resenas` — calificaciones de los clientes
+- `/admin/equipo` — invitar y quitar personal
+- `/admin/invitacion/:token` — aceptar una invitación al equipo
 
 ## Estructura
 ```
@@ -151,11 +174,17 @@ supabase/
                      11 menú público (get_public_menu) · 12 seguimiento en vivo (Broadcast)
                      13 reporte de ventas (get_sales_report) · 14 CAPTCHA de pedidos (create_order
                      solo vía place-order) · 15 operación diaria (horario, zona horaria,
-                     tiempo estimado)
+                     tiempo estimado) · 16 equipo, clientes y reporte ampliado · 17 cupones, promociones,
+                     programados · 18 sellos y reseñas · 19 transferencia y propina
   seed.sql           2 usuarios, 2 restaurantes, menús y pedidos de ejemplo
   tests/             pruebas pgTAP
   functions/og/      Edge Function: vista previa al compartir el link de una tienda
   functions/place-order/  Edge Function: verifica el CAPTCHA y crea el pedido
+  functions/upload-receipt/  Edge Function: guarda el comprobante de transferencia (bucket privado)
+  functions/_shared/  código común de las Edge Functions (CORS, respuestas JSON)
+tests/
+  unit/              pruebas unitarias (Vitest)
+  e2e/               pruebas de navegador (Playwright) + run.mjs que las orquesta
 scripts/
   verify-api.mjs     verificaciones por la API pública
   backup-db.mjs      respaldo cifrado de la base (npm run db:backup)

@@ -7,30 +7,26 @@
  * - Hasta 3 tramos por día (p. ej. almuerzo y cena). Un tramo que cierra "antes" de abrir
  *   termina al día siguiente: 19:00 a 02:00.
  * - Tiempo de preparación: se muestra en la tienda y es el tiempo por defecto al confirmar.
+ * - Pedidos programados: hasta cuántos días antes se puede pedir para una hora futura
+ *   (dentro del horario). 0 = no se aceptan.
  * - Se guarda aparte del resto del formulario (su propio botón), y solo el dueño puede.
  */
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
+import { SelectField } from '@/components/ui/Field'
 import { Switch } from '@/components/ui/Switch'
 import { useSession } from '@/features/auth/AuthProvider'
 import { restaurantKeys, type MyRestaurant } from '@/features/restaurants/api'
 import { dbErrorMessage } from '@/lib/errors'
-import {
-  DAY_NAMES,
-  defaultWeekHours,
-  MAX_SLOTS_PER_DAY,
-  parseWeekHours,
-  TIMEZONES,
-  type TimeSlot,
-  type WeekHours,
-} from '@/lib/openingHours'
+import { DAY_NAMES, defaultWeekHours, MAX_SLOTS_PER_DAY, parseWeekHours, TIMEZONES, type TimeSlot, type WeekHours } from '@/lib/openingHours'
 import { supabase } from '@/lib/supabase'
 
 /** "lunes" → "Lunes". */
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
+/** Sección "Horario y tiempos" de Mi local: horario semanal, zona horaria, preparación y programados. */
 export function OpeningHoursCard({ restaurant }: { restaurant: MyRestaurant }) {
   const session = useSession()
   const queryClient = useQueryClient()
@@ -41,6 +37,7 @@ export function OpeningHoursCard({ restaurant }: { restaurant: MyRestaurant }) {
   const [hours, setHours] = useState<WeekHours>(initial ?? defaultWeekHours())
   const [timezone, setTimezone] = useState(restaurant.timezone)
   const [prep, setPrep] = useState(String(restaurant.prep_time_minutes))
+  const [schedulingDays, setSchedulingDays] = useState(restaurant.scheduling_days)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -61,7 +58,12 @@ export function OpeningHoursCard({ restaurant }: { restaurant: MyRestaurant }) {
     setSaving(true)
     const { error: dbError } = await supabase
       .from('restaurants')
-      .update({ opening_hours: enabled ? hours : null, timezone, prep_time_minutes: minutes })
+      .update({
+        opening_hours: enabled ? hours : null,
+        timezone,
+        prep_time_minutes: minutes,
+        scheduling_days: schedulingDays,
+      })
       .eq('id', restaurant.id)
     setSaving(false)
     if (dbError) return setError(dbErrorMessage(dbError))
@@ -79,20 +81,17 @@ export function OpeningHoursCard({ restaurant }: { restaurant: MyRestaurant }) {
 
       <fieldset disabled={!isOwner} className="space-y-5">
         <div className="grid gap-5 sm:grid-cols-2">
-          <label className="block space-y-1.5 text-sm">
-            <span className="font-medium text-zinc-800">Zona horaria</span>
-            <select
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-              className="block min-h-11 w-full rounded-lg border border-zinc-300 bg-white px-3"
-            >
-              {TIMEZONES.map((tz) => (
-                <option key={tz.id} value={tz.id}>
-                  {tz.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SelectField
+            label="Zona horaria"
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+          >
+            {TIMEZONES.map((tz) => (
+              <option key={tz.id} value={tz.id}>
+                {tz.label}
+              </option>
+            ))}
+          </SelectField>
           <label className="block space-y-1.5 text-sm">
             <span className="font-medium text-zinc-800">Tiempo habitual de preparación (min)</span>
             <input
@@ -106,6 +105,19 @@ export function OpeningHoursCard({ restaurant }: { restaurant: MyRestaurant }) {
             />
             <span className="block text-zinc-500">Se muestra en tu tienda y es el tiempo por defecto al confirmar.</span>
           </label>
+          <SelectField
+            label="Pedidos programados"
+            hint="El cliente elige día y hora dentro de tu horario (ideal para almuerzos de oficina)."
+            value={schedulingDays}
+            onChange={(e) => setSchedulingDays(Number(e.target.value))}
+          >
+            <option value={0}>No aceptar</option>
+            {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+              <option key={d} value={d}>
+                Hasta {d} día{d === 1 ? '' : 's'} antes
+              </option>
+            ))}
+          </SelectField>
         </div>
 
         <div className="space-y-1">
@@ -139,7 +151,12 @@ export function OpeningHoursCard({ restaurant }: { restaurant: MyRestaurant }) {
                           step={300}
                           aria-label={`${DAY_NAMES[day]}, tramo ${i + 1}: abre`}
                           value={slot.open}
-                          onChange={(e) => setDay(day, slots.map((s, j) => (j === i ? { ...s, open: e.target.value } : s)))}
+                          onChange={(e) =>
+                            setDay(
+                              day,
+                              slots.map((s, j) => (j === i ? { ...s, open: e.target.value } : s)),
+                            )
+                          }
                           className="min-h-11 rounded-lg border border-zinc-300 px-2"
                         />
                         <span>a</span>
@@ -148,13 +165,23 @@ export function OpeningHoursCard({ restaurant }: { restaurant: MyRestaurant }) {
                           step={300}
                           aria-label={`${DAY_NAMES[day]}, tramo ${i + 1}: cierra`}
                           value={slot.close}
-                          onChange={(e) => setDay(day, slots.map((s, j) => (j === i ? { ...s, close: e.target.value } : s)))}
+                          onChange={(e) =>
+                            setDay(
+                              day,
+                              slots.map((s, j) => (j === i ? { ...s, close: e.target.value } : s)),
+                            )
+                          }
                           className="min-h-11 rounded-lg border border-zinc-300 px-2"
                         />
                         {slot.close <= slot.open && slot.close !== slot.open && <span className="text-zinc-500">(hasta el día siguiente)</span>}
                         <button
                           type="button"
-                          onClick={() => setDay(day, slots.filter((_, j) => j !== i))}
+                          onClick={() =>
+                            setDay(
+                              day,
+                              slots.filter((_, j) => j !== i),
+                            )
+                          }
                           aria-label={`Quitar tramo ${i + 1} del ${DAY_NAMES[day]}`}
                           className="min-h-11 rounded-lg px-3 font-semibold text-zinc-500 hover:bg-zinc-100"
                         >

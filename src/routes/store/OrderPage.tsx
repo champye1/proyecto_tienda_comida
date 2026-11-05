@@ -6,6 +6,8 @@
  *   - Se valida su formato antes de consultar.
  *   - get_order_by_token nunca devuelve teléfono, nombre ni dirección del cliente.
  *   - La página es noindex (no aparece en buscadores).
+ * Incluye la tarjeta de sellos del cliente (si el local la tiene) y, una vez entregado,
+ * el formulario para calificar el pedido (ver OrderLoyalty.tsx).
  * Si el restaurante indicó un tiempo estimado, se muestra la hora aproximada (en la hora
  * del restaurante). El estado se actualiza en vivo (Realtime, ver features/store/orderLive.ts) y, como
  * respaldo, se consulta cada 60 s y al volver a la pestaña.
@@ -19,11 +21,14 @@ import { useDocumentMeta } from '@/features/store/appearance'
 import { useOrderLiveUpdates } from '@/features/store/orderLive'
 import { FINAL_STATUSES, statusLabel, TRACKING_TOKEN, trackedOrderQuery, type OrderStatus, type TrackedOrder } from '@/features/store/orders'
 import { dbErrorMessage } from '@/lib/errors'
-import { formatCLP, formatTime } from '@/lib/format'
+import { formatCLP, formatDateTime, formatTime } from '@/lib/format'
+import { LoyaltyStatus, ReviewForm } from './OrderLoyalty'
+import { PaymentBox } from './TransferDetails'
 
 /** Pasos del pedido en orden (cancelado se muestra aparte). */
 const STEPS: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'delivered']
 
+/** Página de seguimiento del pedido (por su token secreto). */
 export default function OrderPage() {
   const { slug = '', token = '' } = useParams()
   const validToken = TRACKING_TOKEN.test(token)
@@ -52,10 +57,10 @@ export default function OrderPage() {
       </Shell>
     )
   }
-  return <OrderDetail order={query.data} />
+  return <OrderDetail order={query.data} token={token} />
 }
 
-function OrderDetail({ order }: { order: TrackedOrder }) {
+function OrderDetail({ order, token }: { order: TrackedOrder; token: string }) {
   const [copied, setCopied] = useState(false)
   const cancelled = order.status === 'cancelled'
   const currentStep = STEPS.indexOf(order.status)
@@ -82,6 +87,11 @@ function OrderDetail({ order }: { order: TrackedOrder }) {
           <p className="mt-2 text-sm text-zinc-600">
             {order.type === 'delivery' ? 'Delivery' : 'Retiro en el local'} · {order.payment_method === 'cash' ? 'Pago en efectivo' : 'Pago por transferencia'}
           </p>
+          {order.scheduled_for && !FINAL_STATUSES.includes(order.status) && (
+            <p className="mt-3 inline-block rounded-xl bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-900">
+              Programado para el {formatDateTime(order.scheduled_for, order.restaurant.timezone)}
+            </p>
+          )}
           {order.estimated_ready_at && (order.status === 'confirmed' || order.status === 'preparing') && (
             <p className="mt-3 inline-block rounded-xl bg-brand/10 px-4 py-2 text-sm font-semibold text-zinc-900">
               {order.type === 'delivery' ? 'Sale a despacho' : 'Listo para retirar'} aprox. a las{' '}
@@ -113,6 +123,10 @@ function OrderDetail({ order }: { order: TrackedOrder }) {
           </ol>
         )}
 
+        {order.payment_method === 'transfer' && <PaymentBox order={order} token={token} />}
+        {order.status === 'delivered' && <ReviewForm token={token} order={order} />}
+        {order.loyalty && <LoyaltyStatus loyalty={order.loyalty} />}
+
         <section className="rounded-2xl border border-zinc-200 bg-white p-5">
           <h2 className="font-semibold text-zinc-900">Detalle</h2>
           <ul className="mt-3 divide-y divide-zinc-100 text-sm">
@@ -123,6 +137,7 @@ function OrderDetail({ order }: { order: TrackedOrder }) {
                   {it.selected_options.length > 0 && (
                     <span className="block text-zinc-500">{it.selected_options.map((o) => o.name).join(' · ')}</span>
                   )}
+                  {it.promotion_name && <span className="block text-emerald-700">{it.promotion_name}</span>}
                 </span>
                 <span className="tabular-nums">{formatCLP(it.line_total)}</span>
               </li>
@@ -133,6 +148,18 @@ function OrderDetail({ order }: { order: TrackedOrder }) {
               <div className="flex justify-between">
                 <dt>Delivery</dt>
                 <dd className="tabular-nums">{formatCLP(order.delivery_fee)}</dd>
+              </div>
+            )}
+            {order.discount > 0 && (
+              <div className="flex justify-between text-emerald-700">
+                <dt>Cupón {order.coupon_code}</dt>
+                <dd className="tabular-nums">−{formatCLP(order.discount)}</dd>
+              </div>
+            )}
+            {order.tip > 0 && (
+              <div className="flex justify-between">
+                <dt>Propina (para el equipo)</dt>
+                <dd className="tabular-nums">{formatCLP(order.tip)}</dd>
               </div>
             )}
             <div className="flex justify-between text-base font-bold">

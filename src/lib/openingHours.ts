@@ -107,3 +107,38 @@ export function formatDaySlots(slots: TimeSlot[]): string {
 export function defaultWeekHours(): WeekHours {
   return Array.from({ length: 7 }, () => [{ open: '12:00', close: '22:00' }])
 }
+
+/** Un horario disponible para programar un pedido. */
+export type ScheduleSlot = { iso: string; day: string; dayLabel: string; time: string }
+
+/**
+ * Horarios para programar un pedido: cada 15 minutos, desde ahora + el tiempo de
+ * preparación hasta `days` días, solo dentro del horario de atención (en la hora del
+ * restaurante). El servidor vuelve a validar todo al crear el pedido.
+ */
+export function scheduleSlots(hours: WeekHours | null, timeZone: string, prepMinutes: number, days: number, now = new Date()): ScheduleSlot[] {
+  if (days <= 0) return []
+  const step = 15 * 60_000
+  // Primer horario: redondeado hacia arriba al siguiente cuarto de hora (+1 min de margen).
+  const first = Math.ceil((now.getTime() + (prepMinutes + 1) * 60_000) / step) * step
+  const last = now.getTime() + days * 86_400_000
+  const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone })
+  const timeFmt = new Intl.DateTimeFormat('es-CL', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+  const labelFmt = new Intl.DateTimeFormat('es-CL', { timeZone, weekday: 'long', day: 'numeric', month: 'long' })
+  const today = dayFmt.format(now)
+  const tomorrow = dayFmt.format(new Date(now.getTime() + 86_400_000))
+
+  const slots: ScheduleSlot[] = []
+  for (let t = first; t <= last; t += step) {
+    const at = new Date(t)
+    if (!isWithinHours(hours, timeZone, at)) continue
+    const day = dayFmt.format(at)
+    slots.push({
+      iso: at.toISOString(),
+      day,
+      dayLabel: day === today ? 'Hoy' : day === tomorrow ? 'Mañana' : labelFmt.format(at),
+      time: timeFmt.format(at),
+    })
+  }
+  return slots
+}

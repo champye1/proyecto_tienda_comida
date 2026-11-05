@@ -23,6 +23,7 @@ function niceMax(value: number): number {
   return step * power
 }
 
+/** Gráfico de barras de ventas por hora, día o mes (con tabla accesible). */
 export function SalesChart({ report }: { report: SalesReport }) {
   const [active, setActive] = useState<number | null>(null)
   const [asTable, setAsTable] = useState(false)
@@ -31,8 +32,9 @@ export function SalesChart({ report }: { report: SalesReport }) {
   const max = niceMax(Math.max(...series.map((s) => s.revenue)))
   const ticks = [max, max / 2, 0]
   // En vista por hora se rotula cada 3 horas; por día, todos si son pocos.
-  const labelEvery = report.series_unit === 'hour' ? 3 : series.length > 14 ? 3 : 1
-  const title = report.series_unit === 'hour' ? 'Ventas por hora' : 'Ventas por día'
+  // Etiquetas del eje: cada 3 horas, o espaciadas para que no se encimen con muchos días.
+  const labelEvery = report.series_unit === 'hour' ? 3 : Math.max(1, Math.ceil(series.length / 12))
+  const title = { hour: 'Ventas por hora', day: 'Ventas por día', month: 'Ventas por mes' }[report.series_unit]
 
   return (
     <section aria-labelledby={titleId} className="rounded-2xl border border-zinc-200 bg-white p-5">
@@ -50,7 +52,7 @@ export function SalesChart({ report }: { report: SalesReport }) {
           <table className="w-full text-sm">
             <thead className="text-left text-zinc-500">
               <tr>
-                <th className="py-2 font-medium">{report.series_unit === 'hour' ? 'Hora' : 'Día'}</th>
+                <th className="py-2 font-medium">{{ hour: 'Hora', day: 'Día', month: 'Mes' }[report.series_unit]}</th>
                 <th className="py-2 text-right font-medium">Pedidos</th>
                 <th className="py-2 text-right font-medium">Ventas</th>
               </tr>

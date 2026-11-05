@@ -18,38 +18,14 @@
  *     seguridad (el CAPTCHA sí): solo evita que otros sitios usen esto desde un navegador.
  */
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+import { createHttp, serviceHeaders, SUPABASE_URL } from '../_shared/http.ts'
+
 const TURNSTILE_SECRET = Deno.env.get('TURNSTILE_SECRET_KEY') ?? ''
-const SITE_URL = (Deno.env.get('SITE_URL') ?? '').replace(/\/+$/, '')
-const ALLOW_LOCALHOST = Deno.env.get('ALLOW_LOCALHOST_ORIGINS') === 'true'
+const { cors, json } = createHttp()
 
 const MAX_BODY_BYTES = 32 * 1024
 /** Códigos de error de create_order con mensajes escritos para el cliente (en español). */
 const USER_FACING = new Set(['P0001', 'P0002', '22023'])
-
-/** Cabeceras CORS: solo se autoriza el origen del sitio (y localhost si está habilitado). */
-function cors(origin: string | null): Record<string, string> {
-  const allowed =
-    origin !== null &&
-    (origin === SITE_URL || (ALLOW_LOCALHOST && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)))
-  return allowed
-    ? {
-        'Access-Control-Allow-Origin': origin,
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'content-type, apikey, authorization, x-client-info',
-        'Access-Control-Max-Age': '600',
-        Vary: 'Origin',
-      }
-    : { Vary: 'Origin' }
-}
-
-function json(body: unknown, status: number, origin: string | null): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...cors(origin), 'Content-Type': 'application/json', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store' },
-  })
-}
 
 /** Verifica el token de Turnstile con Cloudflare. */
 async function verifyCaptcha(token: string, ip: string | null): Promise<boolean> {
@@ -63,18 +39,33 @@ async function verifyCaptcha(token: string, ip: string | null): Promise<boolean>
   return result.success === true
 }
 
+/** Texto de hasta `max` caracteres. */
+const isStr = (v: unknown, max = 600) => typeof v === 'string' && v.length <= max
+/** Texto opcional (null/ausente o texto válido). */
+const isOptStr = (v: unknown, max = 600) => v === null || v === undefined || isStr(v, max)
+/** Entero opcional entre 0 y 1.000.000 (p. ej. la propina). */
+const isOptInt = (v: unknown) => v === null || v === undefined || (Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 1_000_000)
+
 /** Forma mínima esperada del pedido (las reglas de negocio las valida create_order). */
 function isOrderShape(o: unknown): o is Record<string, unknown> {
   if (!o || typeof o !== 'object' || Array.isArray(o)) return false
   const r = o as Record<string, unknown>
-  const isStr = (v: unknown) => typeof v === 'string' && v.length <= 600
-  const isOptStr = (v: unknown) => v === null || v === undefined || isStr(v)
   return (
     isStr(r.p_restaurant_slug) && isStr(r.p_customer_name) && isStr(r.p_customer_phone) &&
     isStr(r.p_type) && isStr(r.p_payment_method) && isOptStr(r.p_address) && isOptStr(r.p_notes) &&
-    Array.isArray(r.p_items) && r.p_items.length <= 50
+    Array.isArray(r.p_items) && r.p_items.length <= 50 &&
+    isOptStr(r.p_coupon_code, 40) && isOptStr(r.p_scheduled_for, 40) && isOptInt(r.p_tip)
   )
 }
+
+/**
+ * Parámetros de create_order que acepta esta función. Se reenvía SOLO esta lista: el
+ * navegador no puede agregar parámetros que no le corresponden.
+ */
+const ORDER_PARAMS = [
+  'p_restaurant_slug', 'p_customer_name', 'p_customer_phone', 'p_type', 'p_address', 'p_notes',
+  'p_payment_method', 'p_items', 'p_coupon_code', 'p_scheduled_for', 'p_tip',
+] as const
 
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin')
@@ -109,8 +100,10 @@ Deno.serve(async (req) => {
   // 3. Crear el pedido (create_order valida todo lo demás).
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/create_order`, {
     method: 'POST',
-    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body.order),
+    headers: { ...serviceHeaders, 'Content-Type': 'application/json' },
+    body: JSON.stringify(
+      Object.fromEntries(ORDER_PARAMS.filter((k) => k in (body.order as object)).map((k) => [k, (body.order as Record<string, unknown>)[k]])),
+    ),
   })
   const result = (await res.json().catch(() => null)) as unknown
 

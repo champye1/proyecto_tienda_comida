@@ -417,6 +417,10 @@ verify_jwt = false
 [functions.place-order]
 verify_jwt = false
 
+# Subir el comprobante de transferencia desde el seguimiento. Pública: exige el token del pedido.
+[functions.upload-receipt]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 55327

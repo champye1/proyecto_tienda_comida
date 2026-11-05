@@ -37,11 +37,11 @@ function loadTurnstile(): Promise<TurnstileApi> {
     const script = document.createElement('script')
     script.src = SCRIPT_URL
     script.async = true
-    script.onload = () => (window.turnstile ? resolve(window.turnstile) : reject(new Error('Turnstile no disponible')))
-    script.onerror = () => {
+    script.addEventListener('load', () => (window.turnstile ? resolve(window.turnstile) : reject(new Error('Turnstile no disponible'))))
+    script.addEventListener('error', () => {
       scriptPromise = null // permite reintentar
       reject(new Error('No se pudo cargar el CAPTCHA'))
-    }
+    })
     document.head.appendChild(script)
   })
   return scriptPromise
@@ -58,6 +58,7 @@ type CaptchaProps = {
   ref?: Ref<CaptchaHandle>
 }
 
+/** Widget de CAPTCHA (Turnstile). Llama a onToken con cada token nuevo (o null si vence); usar ref.reset() tras cada intento. */
 export function Captcha({ onToken, ref }: CaptchaProps) {
   const container = useRef<HTMLDivElement>(null)
   const widgetId = useRef<string | null>(null)

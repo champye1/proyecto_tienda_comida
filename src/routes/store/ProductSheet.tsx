@@ -10,7 +10,7 @@
 import { useId, useState } from 'react'
 import { QuantityStepper } from '@/components/ui/QuantityStepper'
 import { Sheet } from '@/components/ui/Sheet'
-import { groupRuleText, unitPrice, validateSelection, type PublicProduct } from '@/features/store/menu'
+import { groupRuleText, unitPrice, validateSelection, type PublicProduct, promoDiscount } from '@/features/store/menu'
 import { formatCLP } from '@/lib/format'
 
 type ProductSheetProps = {
@@ -20,6 +20,7 @@ type ProductSheetProps = {
   onAdd: (product: PublicProduct, optionIds: string[], quantity: number) => boolean
 }
 
+/** Hoja de un producto: opciones, cantidad y "Agregar" al carrito. */
 export function ProductSheet({ product, onClose, onAdd }: ProductSheetProps) {
   return (
     <Sheet open={product !== null} onClose={onClose} label={product ? product.name : 'Producto'}>
@@ -47,7 +48,8 @@ function ProductForm({ product, onClose, onAdd }: { product: PublicProduct; onCl
 
   const optionIds = Object.values(selection).flat()
   const problem = validateSelection(product, optionIds)
-  const total = unitPrice(product, optionIds) * quantity
+  // Total con la promoción vigente (estimado; el servidor recalcula al confirmar).
+  const total = unitPrice(product, optionIds) * quantity - promoDiscount(product.promo, unitPrice(product, optionIds), quantity)
 
   /** Marca o desmarca una opción respetando el máximo del grupo. */
   function toggle(groupId: string, optionId: string, max: number) {
@@ -88,6 +90,11 @@ function ProductForm({ product, onClose, onAdd }: { product: PublicProduct; onCl
             <h2 className="pr-10 text-xl font-bold text-zinc-900">{product.name}</h2>
             {product.description && <p className="mt-2 text-zinc-600">{product.description}</p>}
             <p className="mt-2 font-semibold text-zinc-900">{formatCLP(product.price)}</p>
+            {product.promo && (
+              <p className="mt-2 inline-block rounded-lg bg-brand/10 px-3 py-1 text-sm font-semibold text-zinc-900">
+                {product.promo.name}: {product.promo.kind === 'percent' ? `${product.promo.percent}% de descuento` : 'lleva 2 y paga 1'}
+              </p>
+            )}
           </div>
 
           {product.option_groups.map((g) => {

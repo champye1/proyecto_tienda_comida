@@ -28,6 +28,7 @@ import { dbErrorMessage } from '@/lib/errors'
 import { fieldErrors, type FieldErrors } from '@/lib/forms'
 import { OptionGroupsEditor } from './OptionGroupsEditor'
 
+/** Editor de un producto (nuevo o existente): datos, foto y grupos de opciones. */
 export default function ProductEditorPage() {
   const { restaurant } = useCurrentRestaurant()
   const rid = restaurant.id
@@ -79,6 +80,8 @@ function ProductForm({ rid, categories, product }: ProductFormProps) {
     price: product ? formatPriceInput(String(product.price)) : '',
     category_id: product?.category_id ?? params.get('categoria') ?? categories[0]?.id ?? '',
     is_available: product?.is_available ?? true,
+    is_featured: product?.is_featured ?? false,
+    is_upsell: product?.is_upsell ?? false,
   })
   const [errors, setErrors] = useState<FieldErrors<ProductValues>>({})
   const [formError, setFormError] = useState<string | null>(null)
@@ -248,6 +251,12 @@ function ProductForm({ rid, categories, product }: ProductFormProps) {
             label="Disponible para pedir"
             showLabel
           />
+          {/* Vender más (etapa C): destacar el producto y sugerirlo en el carrito. */}
+          <div className="flex flex-wrap gap-6">
+            <Switch checked={values.is_featured} onChange={(is_featured) => setValues((v) => ({ ...v, is_featured }))} label="Destacado" showLabel />
+            <Switch checked={values.is_upsell} onChange={(is_upsell) => setValues((v) => ({ ...v, is_upsell }))} label="Sugerir en el carrito" showLabel />
+          </div>
+          <p className="text-sm text-zinc-500">Destacado: aparece arriba en tu tienda. Sugerir: se ofrece en el carrito (ideal para bebidas y postres).</p>
         </div>
 
         {/* Foto */}

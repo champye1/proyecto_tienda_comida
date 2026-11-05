@@ -5,9 +5,10 @@
  * - Pedido "Nuevo" con más de 5 minutos sin confirmar: el tiempo se marca en ámbar.
  * - "Confirmar" usa el tiempo habitual del local (un toque); otro tiempo se elige en el detalle.
  * - En cocina muestra la hora estimada y, si ya pasó, cuántos minutos va atrasado (en rojo).
+ * - Pedido programado: etiqueta violeta con el día y la hora para la que lo pidieron.
  */
 import { etaMinutesLeft, nextAction, optionNames, timeAgo, type AdminOrder, type OrderStatus } from '@/features/orders/api'
-import { formatCLP, formatTime } from '@/lib/format'
+import { formatCLP, formatDateTime, formatTime } from '@/lib/format'
 
 type OrderCardProps = {
   order: AdminOrder
@@ -25,6 +26,7 @@ type OrderCardProps = {
 /** Cuántas líneas de productos se muestran en la tarjeta antes de "y N más". */
 const MAX_LINES = 3
 
+/** Tarjeta de un pedido en el tablero, con su acción principal. */
 export function OrderCard({ order, now, fresh, busy, prepMinutes, timeZone, onAdvance, onConfirm, onOpen }: OrderCardProps) {
   const action = nextAction(order)
   const minutes = (now - new Date(order.created_at).getTime()) / 60_000
@@ -57,6 +59,16 @@ export function OrderCard({ order, now, fresh, busy, prepMinutes, timeZone, onAd
             {left < 0
               ? `Atrasado ${-left} min (era ${formatTime(order.estimated_ready_at, timeZone)})`
               : `Listo aprox. ${formatTime(order.estimated_ready_at, timeZone)} · en ${left} min`}
+          </p>
+        )}
+        {order.payment_method === 'transfer' && order.payment_status !== 'verified' && order.status !== 'cancelled' && (
+          <p className={`mt-2 inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${order.payment_status === 'reported' ? 'bg-sky-100 text-sky-900' : 'bg-zinc-100 text-zinc-700'}`}>
+            {order.payment_status === 'reported' ? 'Transferencia informada' : 'Transferencia pendiente'}
+          </p>
+        )}
+        {order.scheduled_for && (
+          <p className="mt-2 inline-block rounded-md bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-900">
+            Programado: {formatDateTime(order.scheduled_for, timeZone)}
           </p>
         )}
         <p className="mt-2 truncate text-sm font-medium text-zinc-800">{order.customer_name}</p>

@@ -11,7 +11,7 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { z } from 'zod'
-import { indexProducts, optionsLabel, unitPrice, validateSelection, type PublicMenu, type PublicProduct } from './menu'
+import { indexProducts, optionsLabel, unitPrice, validateSelection, type PublicMenu, type PublicProduct, promoDiscount } from './menu'
 
 export const MAX_LINES = 50
 export const MAX_QUANTITY = 99
@@ -32,6 +32,8 @@ export type ResolvedLine = CartLine & {
   product: PublicProduct
   optionsText: string
   unitPrice: number
+  /** Descuento estimado de la promoción vigente (0 si no hay). */
+  discount: number
   lineTotal: number
 }
 
@@ -136,13 +138,15 @@ export function resolveCart(lines: CartLine[], menu: PublicMenu) {
       continue
     }
     const price = unitPrice(product, line.optionIds)
+    const discount = promoDiscount(product.promo, price, line.quantity)
     resolved.push({
       ...line,
       key: lineKey(line.productId, line.optionIds),
       product,
       optionsText: optionsLabel(product, line.optionIds),
       unitPrice: price,
-      lineTotal: price * line.quantity,
+      discount,
+      lineTotal: price * line.quantity - discount,
     })
   }
   const subtotal = resolved.reduce((sum, l) => sum + l.lineTotal, 0)

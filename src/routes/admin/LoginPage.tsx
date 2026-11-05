@@ -20,6 +20,7 @@ import { fieldErrors, type FieldErrors } from '@/lib/forms'
 import { supabase } from '@/lib/supabase'
 import { AuthCard } from './AuthCard'
 
+/** Formulario de inicio de sesión del panel (con CAPTCHA). */
 export default function LoginPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
@@ -63,7 +64,11 @@ export default function LoginPage() {
       footer={
         <>
           ¿No tienes cuenta?{' '}
-          <Link to="/admin/registro" className="font-semibold text-brand hover:underline">
+          {/* Conserva ?next= (p. ej. una invitación) para volver ahí después de registrarse. */}
+          <Link
+            to={params.get('next') ? `/admin/registro?next=${encodeURIComponent(params.get('next') ?? '')}` : '/admin/registro'}
+            className="font-semibold text-brand hover:underline"
+          >
             Regístrate
           </Link>
         </>

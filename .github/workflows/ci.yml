@@ -1,10 +1,11 @@
 # =============================================================================
 # CI: verifica cada push y cada pull request automáticamente.
 #
-#   app       → dependencias sin vulnerabilidades altas, tipos de TypeScript y build.
+#   app       → dependencias sin vulnerabilidades altas, linter (oxlint), pruebas unitarias
+#               (Vitest), tipos de TypeScript y build.
 #   database  → levanta Supabase local, aplica TODAS las migraciones desde cero + seed,
 #               y corre el linter SQL, las pruebas pgTAP (RLS, permisos, reglas de
-#               negocio) y las verificaciones por la API (Realtime, Storage, pedidos).
+#               negocio), las verificaciones por la API y las pruebas de navegador (E2E).
 #
 # Si algo falla, GitHub marca el commit en rojo y avisa por correo.
 # Seguridad: el workflow solo tiene permiso de LECTURA sobre el repositorio y no usa
@@ -28,7 +29,7 @@ concurrency:
 
 jobs:
   app:
-    name: App (audit + tipos + build)
+    name: App (audit + lint + unitarias + build)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -45,13 +46,17 @@ jobs:
       - run: npm ci
       - name: Dependencias sin vulnerabilidades altas o críticas
         run: npm audit --audit-level=high
+      - name: Linter (errores comunes de React y TypeScript; los avisos también fallan)
+        run: npm run lint
+      - name: Pruebas unitarias (precios, horarios, exportación CSV)
+        run: npm test
       - name: Tipos de TypeScript + build de producción
         run: npm run build
 
   database:
-    name: Base de datos (lint + pgTAP + API)
+    name: Base de datos (lint + pgTAP + API + E2E)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -72,10 +77,16 @@ jobs:
       - name: Verificaciones por la API (Realtime, Storage, concurrencia)
         run: |
           eval "$(npx supabase status -o env | grep -E '^(API_URL|PUBLISHABLE_KEY|ANON_KEY)=')"
-          printf 'VITE_SUPABASE_URL=%s\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\n' "$API_URL" "${PUBLISHABLE_KEY:-$ANON_KEY}" > .env.local
+          printf 'VITE_SUPABASE_URL=%s\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\nVITE_TURNSTILE_SITE_KEY=1x00000000000000000000AA\n' "$API_URL" "${PUBLISHABLE_KEY:-$ANON_KEY}" > .env.local
           # Realtime se reinicia con el seed: se le da un momento para quedar listo.
           sleep 15
           npm run verify:api
+
+      - name: Navegador para las pruebas E2E (Chromium de Playwright)
+        run: npx playwright-core install --with-deps chromium
+
+      - name: Pruebas de navegador (E2E) sobre el build de producción
+        run: npm run test:e2e
 
       - name: Logs de Supabase (solo si algo falló)
         if: failure()

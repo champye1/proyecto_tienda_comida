@@ -32,6 +32,10 @@ const productSchema = z.object({
   description: z.string().nullable(),
   price: z.number().int().min(0),
   image_url: z.string().nullable(),
+  is_featured: z.boolean(),
+  is_upsell: z.boolean(),
+  /** Promoción vigente (la calcula el servidor; aquí solo se muestra y se estima). */
+  promo: z.object({ name: z.string(), kind: z.enum(['percent', 'two_for_one']), percent: z.number().int().nullable() }).nullable(),
   option_groups: z.array(groupSchema),
 })
 
@@ -54,8 +58,28 @@ const restaurantSchema = z.object({
   opening_hours: z.unknown().transform(parseWeekHours),
   timezone: z.string(),
   prep_time_minutes: z.number().int(),
+  /** Días de anticipación para programar pedidos (0 = no acepta). */
+  scheduling_days: z.number().int(),
+  /** Tarjeta de sellos del local (null si no está activa). */
+  loyalty: z.object({ required: z.number().int(), reward_kind: z.string(), reward_value: z.number().int() }).nullable(),
+  /** ¿Acepta propina en línea? */
+  tips_enabled: z.boolean(),
+  /** Datos para transferir (null si el local no los completó). */
+  transfer: z
+    .object({
+      holder: z.string(),
+      rut: z.string().nullable(),
+      bank: z.string(),
+      account_type: z.string().nullable(),
+      account_number: z.string(),
+      email: z.string().nullable(),
+    })
+    .nullable(),
 })
 
+export type TransferInfo = NonNullable<z.infer<typeof restaurantSchema>['transfer']>
+
+/** Respuesta de get_public_menu validada: restaurante + categorías con productos y opciones. */
 export const publicMenuSchema = z.object({
   restaurant: restaurantSchema,
   categories: z.array(z.object({ id: z.uuid(), name: z.string(), products: z.array(productSchema) })),
@@ -107,6 +131,14 @@ export function unitPrice(product: PublicProduct, optionIds: string[]): number {
     .filter((o) => optionIds.includes(o.id))
     .reduce((sum, o) => sum + o.extra_price, 0)
   return product.price + extras
+}
+
+// Fórmula del descuento de promociones: ver pricing.ts (también la usa el carrito).
+export { promoDiscount } from './pricing'
+
+/** Etiqueta corta de la promoción: "-20%" o "2x1". */
+export function promoBadge(promo: NonNullable<PublicProduct['promo']>): string {
+  return promo.kind === 'percent' ? `-${promo.percent}%` : '2x1'
 }
 
 /** Texto de las opciones elegidas, en el orden del menú: "Familiar · Extra queso". */

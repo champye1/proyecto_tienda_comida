@@ -181,6 +181,10 @@ check(noToken.status === 400 && !noToken.data, 'place-order rechaza un pedido si
 const big = await placeOrder({ ...orderArgs('pizzeria-demo', ITEMS_A, 'Grande'), p_notes: 'x'.repeat(40_000) })
 check(big.status === 413, 'place-order rechaza cuerpos demasiado grandes (413)')
 
+// Parámetros desconocidos se descartan (lista blanca): el pedido se crea igual, sin ellos.
+const extra = await placeOrder({ ...orderArgs('pizzeria-demo', ITEMS_A, 'Con extras', '+56933335555'), p_restaurant_id: B_ID, role: 'admin' })
+check(extra.status === 200, 'place-order ignora parámetros que no están en su lista blanca')
+
 const business = await placeOrder(orderArgs('pizzeria-demo', [], 'Vacío', '+56933334444'))
 check(business.status === 400 && typeof business.error?.message === 'string',
   'Los errores de negocio de create_order llegan con su mensaje en español')

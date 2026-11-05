@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { publicFunction, publicRpc } from '@/lib/publicApi'
 import type { Database, Enums } from '@/types/database.types'
 import type { CartLine } from './cart'
+import type { AppliedCoupon } from './pricing'
 
 export type OrderType = Enums<'order_type'>
 export type PaymentMethod = Enums<'payment_method'>
@@ -47,11 +48,16 @@ export type PlacedOrder = Database['public']['Functions']['create_order']['Retur
  * Solo viajan ids y cantidades: los precios los calcula el servidor.
  * Devuelve el número de pedido y el token secreto para la página de seguimiento.
  */
+/** Extras opcionales del pedido: cupón, hora programada (ISO) y propina. */
+export type OrderExtras = { couponCode?: string | null; scheduledFor?: string | null; tip?: number }
+
+/** Envía el pedido a place-order (CAPTCHA + create_order) y devuelve número y token de seguimiento. */
 export async function createOrder(
   slug: string,
   values: z.output<typeof checkoutSchema>,
   lines: CartLine[],
   captchaToken: string,
+  extras: OrderExtras = {},
 ): Promise<PlacedOrder> {
   return publicFunction<PlacedOrder>('place-order', {
     captchaToken,
@@ -64,8 +70,26 @@ export async function createOrder(
       p_notes: values.notes || null,
       p_payment_method: values.payment_method,
       p_items: lines.map((l) => ({ product_id: l.productId, quantity: l.quantity, option_ids: l.optionIds })),
+      p_coupon_code: extras.couponCode ?? null,
+      p_scheduled_for: extras.scheduledFor ?? null,
+      p_tip: extras.tip ?? 0,
     },
   })
+}
+
+// Tipo del cupón aplicado y fórmula del descuento: ver pricing.ts.
+export { couponDiscount, type AppliedCoupon } from './pricing'
+
+/** Valida un cupón contra el servidor (RPC pública check_coupon). Lanza el mensaje si no sirve. */
+export async function checkCoupon(slug: string, code: string, subtotal: number, deliveryFee: number, phone: string): Promise<AppliedCoupon> {
+  const data = (await publicRpc('check_coupon', {
+    p_slug: slug,
+    p_code: code,
+    p_subtotal: subtotal,
+    p_delivery_fee: deliveryFee,
+    p_phone: phone,
+  })) as AppliedCoupon & { discount: number }
+  return { code: data.code, kind: data.kind, value: data.value }
 }
 
 // -----------------------------------------------------------------------------
@@ -117,6 +141,22 @@ const trackedOrderSchema = z.object({
   created_at: z.string(),
   updated_at: z.string(),
   estimated_ready_at: z.string().nullable(),
+  discount: z.number().int(),
+  coupon_code: z.string().nullable(),
+  tip: z.number().int(),
+  scheduled_for: z.string().nullable(),
+  review: z.object({ rating: z.number().int(), comment: z.string().nullable() }).nullable(),
+  payment_status: z.enum(['unpaid', 'reported', 'verified']),
+  has_receipt: z.boolean(),
+  loyalty: z
+    .object({
+      stamps: z.number().int(),
+      required: z.number().int(),
+      reward_kind: z.string(),
+      reward_value: z.number().int(),
+      reward_code: z.string().nullable(),
+    })
+    .nullable(),
   restaurant: z.object({
     name: z.string(),
     slug: z.string(),
@@ -124,6 +164,17 @@ const trackedOrderSchema = z.object({
     phone: z.string().nullable(),
     primary_color: z.string(),
     timezone: z.string(),
+    google_review_url: z.string().nullable(),
+    transfer: z
+      .object({
+        holder: z.string(),
+        rut: z.string().nullable(),
+        bank: z.string(),
+        account_type: z.string().nullable(),
+        account_number: z.string(),
+        email: z.string().nullable(),
+      })
+      .nullable(),
   }),
   items: z.array(
     z.object({
@@ -131,6 +182,8 @@ const trackedOrderSchema = z.object({
       quantity: z.number().int(),
       unit_price: z.number().int(),
       line_total: z.number().int(),
+      discount: z.number().int(),
+      promotion_name: z.string().nullable(),
       selected_options: z.array(z.object({ name: z.string() }).loose()),
     }),
   ),

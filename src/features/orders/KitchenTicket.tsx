@@ -12,6 +12,7 @@
 import { formatCLP, formatDateTime, formatTime } from '@/lib/format'
 import { optionNames, type AdminOrder } from './api'
 
+/** Contenido de la comanda impresa de un pedido (se pasa a usePrint().print). */
 export function KitchenTicket({ order, restaurantName, timeZone }: { order: AdminOrder; restaurantName: string; timeZone: string }) {
   return (
     <div className="w-[72mm] font-mono text-[13px] leading-snug text-black">
@@ -19,6 +20,7 @@ export function KitchenTicket({ order, restaurantName, timeZone }: { order: Admi
       <p className="mt-1 text-center text-3xl font-black">#{order.order_number}</p>
       <p className="text-center text-base font-bold uppercase">{order.type === 'delivery' ? 'Delivery' : 'Retiro en local'}</p>
       <p className="text-center">{formatDateTime(order.created_at, timeZone)}</p>
+      {order.scheduled_for && <p className="text-center text-base font-black">PROGRAMADO: {formatDateTime(order.scheduled_for, timeZone)}</p>}
       {order.estimated_ready_at && <p className="text-center font-bold">Listo aprox.: {formatTime(order.estimated_ready_at, timeZone)}</p>}
 
       <hr className="my-2 border-t border-dashed border-black" />
@@ -29,6 +31,7 @@ export function KitchenTicket({ order, restaurantName, timeZone }: { order: Admi
               {it.quantity} × {it.product_name}
             </p>
             {optionNames(it.selected_options) && <p className="pl-4">+ {optionNames(it.selected_options)}</p>}
+            {it.promotion_name && <p className="pl-4">* {it.promotion_name}</p>}
           </li>
         ))}
       </ul>
@@ -51,11 +54,26 @@ export function KitchenTicket({ order, restaurantName, timeZone }: { order: Admi
           <span>{formatCLP(order.delivery_fee)}</span>
         </p>
       )}
+      {order.discount > 0 && (
+        <p className="flex justify-between">
+          <span>Cupón {order.coupon_code}</span>
+          <span>-{formatCLP(order.discount)}</span>
+        </p>
+      )}
+      {order.tip > 0 && (
+        <p className="flex justify-between">
+          <span>Propina</span>
+          <span>{formatCLP(order.tip)}</span>
+        </p>
+      )}
       <p className="flex justify-between text-base font-bold">
         <span>TOTAL</span>
         <span>{formatCLP(order.total)}</span>
       </p>
-      <p>Pago: {order.payment_method === 'cash' ? 'Efectivo' : 'Transferencia'}</p>
+      <p>
+        Pago: {order.payment_method === 'cash' ? 'Efectivo' : 'Transferencia'}
+        {order.payment_method === 'transfer' && (order.payment_status === 'verified' ? ' (PAGADO)' : ' (por verificar)')}
+      </p>
     </div>
   )
 }
@@ -71,6 +89,7 @@ export function readAutoPrint(): boolean {
   }
 }
 
+/** Guarda en este dispositivo si la comanda se imprime sola al confirmar. */
 export function saveAutoPrint(on: boolean) {
   try {
     localStorage.setItem(AUTO_PRINT_KEY, on ? 'on' : 'off')

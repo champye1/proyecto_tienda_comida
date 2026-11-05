@@ -15,6 +15,7 @@ import type { MyRestaurant } from '@/features/restaurants/api'
 
 type StoreQrModalProps = { open: boolean; onClose: () => void; restaurant: MyRestaurant; storeUrl: string }
 
+/** Ventana con el QR de la tienda: descargas PNG/SVG y cartel para imprimir. */
 export function StoreQrModal({ open, onClose, restaurant, storeUrl }: StoreQrModalProps) {
   const { print, portal } = usePrint()
   const file = `qr-${restaurant.slug}`
@@ -28,6 +29,8 @@ export function StoreQrModal({ open, onClose, restaurant, storeUrl }: StoreQrMod
           Imprímelo para tus mesas, la caja o la vitrina: tus clientes lo escanean con la cámara y llegan directo a tu menú.
         </p>
         <div className="flex flex-wrap justify-center gap-2">
+          {/* Falso positivo del linter: es un elemento JSX pasado a print(), no un componente nuevo. */}
+          {/* oxlint-disable-next-line react/no-unstable-nested-components */}
           <Button onClick={() => print(<QrPoster restaurant={restaurant} storeUrl={storeUrl} />)}>Imprimir cartel</Button>
           <Button variant="secondary" onClick={() => downloadQrPng(storeUrl, `${file}.png`)}>
             Descargar PNG
